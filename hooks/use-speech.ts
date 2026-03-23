@@ -38,7 +38,9 @@ export function useSpeech(options: SpeechOptions = {}) {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
             micStreamRef.current = stream
 
-            const ctx = new AudioContext()
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+            if (ctx.state === "suspended") await ctx.resume()
+            
             const source = ctx.createMediaStreamSource(stream)
             const analyzer = ctx.createAnalyser()
             analyzer.fftSize = 256
@@ -48,8 +50,11 @@ export function useSpeech(options: SpeechOptions = {}) {
             const data = new Uint8Array(analyzer.frequencyBinCount)
             const tick = () => {
                 analyzer.getByteFrequencyData(data)
+                // Root Mean Square (RMS) would be better, but average is fine for a simple meter
                 const avg = data.reduce((a, b) => a + b, 0) / data.length
-                setMicVolume(Math.round(Math.min(100, avg * 2.2)))
+                // Increase sensitivity (3.5x multiplier) and add a small floor
+                const vol = Math.round(Math.min(100, Math.max(0, avg - 2) * 3.5))
+                setMicVolume(vol)
                 rafRef.current = requestAnimationFrame(tick)
             }
             rafRef.current = requestAnimationFrame(tick)
@@ -70,34 +75,66 @@ export function useSpeech(options: SpeechOptions = {}) {
         setMicVolume(0)
     }, [])
 
-    // ── Google TTS speak ─────────────────────────────────────────
-    const speak = useCallback(async (text: string): Promise<void> => {
-        return new Promise(async (resolve) => {
-            try {
-                setIsSpeaking(true)
-                const res = await fetch("/api/tts", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ text }),
-                })
-                if (!res.ok) throw new Error("TTS failed")
-                const { audioContent } = await res.json()
+    // ── Browser SpeechSynthesis fallback (free, no API key) ────
+    const speakWithBrowser = useCallback((text: string): Promise<void> => {
+        return new Promise((resolve) => {
+            if (!("speechSynthesis" in window)) {
+                resolve()
+                return
+            }
+            // Cancel any ongoing speech
+            window.speechSynthesis.cancel()
 
+            const utterance = new SpeechSynthesisUtterance(text)
+            utterance.rate = 1.0
+            utterance.pitch = 1.0
+            utterance.volume = 1.0
+            utterance.lang = "en-US"
+
+            // Try to pick a good English voice
+            const voices = window.speechSynthesis.getVoices()
+            const preferred = voices.find(v => v.name.includes("Google") && v.lang.startsWith("en"))
+                || voices.find(v => v.lang.startsWith("en-US"))
+                || voices.find(v => v.lang.startsWith("en"))
+            if (preferred) utterance.voice = preferred
+
+            utterance.onend = () => { setIsSpeaking(false); resolve(); options.onEnd?.() }
+            utterance.onerror = () => { setIsSpeaking(false); resolve() }
+            window.speechSynthesis.speak(utterance)
+        })
+    }, [options])
+
+    // ── Speak: try Google TTS first, fall back to browser ─────
+    const speak = useCallback(async (text: string): Promise<void> => {
+        setIsSpeaking(true)
+        try {
+            const res = await fetch("/api/tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+            })
+            if (!res.ok) throw new Error("API TTS failed")
+
+            const { audioContent } = await res.json()
+            if (!audioContent) throw new Error("No audio content")
+
+            return new Promise((resolve) => {
                 const audio = new Audio(`data:audio/mp3;base64,${audioContent}`)
                 audioRef.current = audio
                 audio.onended = () => { setIsSpeaking(false); resolve(); options.onEnd?.() }
                 audio.onerror = () => { setIsSpeaking(false); resolve() }
-                await audio.play()
-            } catch (err) {
-                console.error("TTS error:", err)
-                setIsSpeaking(false)
-                resolve()
-            }
-        })
-    }, [options])
+                audio.play().catch(() => { setIsSpeaking(false); resolve() })
+            })
+        } catch {
+            // Fallback to free browser TTS
+            console.info("Google TTS unavailable, using browser speech synthesis")
+            return speakWithBrowser(text)
+        }
+    }, [options, speakWithBrowser])
 
     const stopSpeaking = useCallback(() => {
         if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0 }
+        if ("speechSynthesis" in window) window.speechSynthesis.cancel()
         setIsSpeaking(false)
     }, [])
 

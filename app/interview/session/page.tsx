@@ -30,36 +30,39 @@ const STATUS_LABELS: Record<string, { text: string; color: string }> = {
 // ── Mic indicator bar (like Google Meet) ───────────────────────
 function MicIndicator({ volume, blocked, active }: { volume: number; blocked: boolean; active: boolean }) {
     const bars = 5
-    const filledBars = blocked ? 0 : Math.round((volume / 100) * bars)
+    // If volume > 0, always show at least one bar so user knows it's working
+    const filledBars = blocked ? 0 : volume > 0 ? Math.max(1, Math.ceil((volume / 100) * bars)) : 0
 
     return (
         <div
-            className="flex items-center gap-2 rounded-xl px-3 py-2"
+            className="flex items-center gap-3 rounded-xl px-4 py-2"
             style={{
                 background: blocked ? "rgba(248,113,113,0.08)" : "rgba(255,255,255,0.04)",
-                border: `1px solid ${blocked ? "rgba(248,113,113,0.3)" : "rgba(255,255,255,0.08)"}`,
+                border: `1px solid ${blocked ? "rgba(248,113,113,0.3)" : active ? "rgba(52,211,153,0.3)" : "rgba(255,255,255,0.08)"}`,
+                boxShadow: active && volume > 10 ? `0 0 15px rgba(52,211,153,0.1)` : "none"
             }}
         >
             {blocked
-                ? <MicOff className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
+                ? <MicOff className="h-4 w-4 text-red-400 flex-shrink-0" />
                 : active
-                    ? <Mic className="h-3.5 w-3.5 text-emerald-400 animate-pulse flex-shrink-0" />
-                    : <Mic className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                    ? <Mic className="h-4 w-4 text-emerald-400 animate-pulse flex-shrink-0" />
+                    : <Mic className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             }
 
             {/* Volume bars */}
-            <div className="flex items-end gap-[2px] h-4">
+            <div className="flex items-end gap-[3px] h-4">
                 {[...Array(bars)].map((_, i) => (
                     <div
                         key={i}
-                        className="w-1 rounded-sm transition-all duration-75"
+                        className="w-1.5 rounded-sm transition-all duration-75"
                         style={{
                             height: `${(i + 1) * 20}%`,
                             background: blocked
                                 ? "rgba(248,113,113,0.3)"
                                 : i < filledBars
-                                    ? (volume > 70 ? "#34d399" : volume > 35 ? "#60a5fa" : "#34d399")
-                                    : "rgba(255,255,255,0.12)",
+                                    ? (volume > 75 ? "#34d399" : volume > 40 ? "#60a5fa" : "#10b981")
+                                    : "rgba(255,255,255,0.1)",
+                            boxShadow: !blocked && i < filledBars ? `0 0 8px ${volume > 75 ? "#34d39960" : "#10b98160"}` : "none"
                         }}
                     />
                 ))}
@@ -97,6 +100,7 @@ export default function SessionPage() {
     const params = useSearchParams()
     const started = useRef(false)
     const [cameraEnded, setCameraEnded] = useState(false)
+    const cameraWasActive = useRef(false)
 
     const config = {
         role: params.get("role") || "SWE",
@@ -109,15 +113,13 @@ export default function SessionPage() {
     const {
         status, exchanges, currentQuestion,
         elapsedSeconds, isSpeaking, isListening,
+        interimTranscript,
         cameraState, videoRef,
         startInterview, endInterview,
     } = useInterview(config)
 
     // Get mic volume from a separate speech hook instance (just for volume meter)
     const { micVolume, micBlocked, startVolumeAnalyzer, stopVolumeAnalyzer } = useSpeech()
-
-    // Live interim transcript shown while user is speaking
-    const [liveText, setLiveText] = useState("")
 
     useEffect(() => {
         if (!started.current) {
@@ -129,21 +131,15 @@ export default function SessionPage() {
     }, [startInterview, startVolumeAnalyzer, stopVolumeAnalyzer])
 
     // Watch for camera being turned off mid-interview
+    // Only trigger if camera was previously active (avoids false positives on startup)
     useEffect(() => {
-        if (status !== "idle" && status !== "done" && !cameraState.isActive && cameraState.error) {
+        if (cameraState.isActive) {
+            cameraWasActive.current = true
+        }
+        if (cameraWasActive.current && !cameraState.isActive && cameraState.error && status !== "idle" && status !== "done") {
             setCameraEnded(true)
         }
     }, [cameraState.isActive, cameraState.error, status])
-
-    // Track live transcript from the last exchange
-    useEffect(() => {
-        const last = exchanges[exchanges.length - 1]
-        if (last && !last.answer) {
-            setLiveText(last.answer || "")
-        } else {
-            setLiveText("")
-        }
-    }, [exchanges])
 
     const handleEnd = async () => {
         stopVolumeAnalyzer()
@@ -282,15 +278,15 @@ export default function SessionPage() {
                                 <Mic className="h-3 w-3 text-emerald-400" />
                                 <span className="text-emerald-400 text-[11px] font-semibold uppercase tracking-wider">Speaking…</span>
                             </div>
-                            {/* Final transcript */}
+                            {/* Final transcript from last exchange */}
                             {exchanges[exchanges.length - 1]?.answer ? (
                                 <p className="text-foreground text-sm leading-relaxed">
                                     {exchanges[exchanges.length - 1].answer}
                                 </p>
                             ) : null}
-                            {/* Interim (live in real time) */}
+                            {/* Interim transcript (live in real time) */}
                             <p className="text-foreground/50 text-sm italic leading-relaxed">
-                                {liveText || "Waiting for speech…"}
+                                {interimTranscript || "Waiting for speech…"}
                             </p>
                         </div>
                     ) : (
@@ -370,7 +366,7 @@ export default function SessionPage() {
                                             style={{ background: "rgba(52,211,153,0.04)", border: "1px dashed rgba(52,211,153,0.2)" }}>
                                             <p className="text-emerald-400 text-[11px] font-semibold mb-1">You — speaking</p>
                                             <p className="text-foreground/40 text-xs italic">
-                                                {liveText || "Listening…"}
+                                                {interimTranscript || "Listening…"}
                                             </p>
                                         </div>
                                     ) : null}

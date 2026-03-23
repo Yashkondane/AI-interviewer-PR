@@ -86,6 +86,15 @@ export function useCamera() {
         let expression: FrameScore["expression"] = "neutral"
 
         try {
+            // Temporarily suppress MediaPipe INFO messages that go through console.error
+            // (Next.js treats ALL console.error calls as unhandled errors)
+            const origError = console.error
+            console.error = (...args: any[]) => {
+                const msg = typeof args[0] === "string" ? args[0] : ""
+                if (msg.includes("INFO:") || msg.includes("Created TensorFlow Lite")) return
+                origError.apply(console, args)
+            }
+
             // ── Face Analysis ──────────────────────────────────────────
             const faceResult = face.detectForVideo(video, now)
             if (faceResult?.faceLandmarks?.[0]) {
@@ -133,11 +142,14 @@ export function useCamera() {
 
                     const levelScore = Math.max(0, 100 - shoulderDiff * 800)
                     const uprightScore = shoulderAboveHip > 0.15
-                        ? Math.min(100, 40 + uprightScore * 200) : 30
+                        ? Math.min(100, 40 + shoulderAboveHip * 200) : 30
 
                     posture = Math.round((levelScore + uprightScore) / 2)
                 }
             }
+
+            // Restore original console.error
+            console.error = origError
         } catch (_) {
             // Ignore per-frame errors
         }
@@ -153,6 +165,13 @@ export function useCamera() {
                 audio: false,
             })
             streamRef.current = stream
+
+            // Attach stream to video element so it actually renders
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream
+                videoRef.current.play().catch(() => { })
+            }
+
             setState(s => ({ ...s, isActive: true, error: null }))
 
             const modelsLoaded = await loadModels()

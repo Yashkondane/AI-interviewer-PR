@@ -4,11 +4,12 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight, Video, Briefcase, Clock, LogIn, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/supabase/client"
 
 const ROLES = ["SWE", "PM", "Design", "Data", "Finance", "Marketing", "HR", "Other"]
 const SENIORITIES = ["Junior", "Mid", "Senior", "Staff"]
 const TYPES = ["Behavioral", "Technical", "Mixed"]
-const DURATIONS = [15, 30, 45]
+const DURATIONS = [5, 15, 30, 45]
 
 // ── Auth-check modal ─────────────────────────────────────────
 function AuthCheckModal({
@@ -194,7 +195,15 @@ export default function SetupPage() {
                         </div>
 
                         <Button
-                            onClick={() => setShowAuthCheck(true)}
+                            onClick={async () => {
+                                const supabase = createClient()
+                                const { data: { session } } = await supabase.auth.getSession()
+                                if (session) {
+                                    startSession()
+                                } else {
+                                    setShowAuthCheck(true)
+                                }
+                            }}
                             disabled={loading}
                             className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-semibold text-base gap-2"
                         >

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { use, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -124,7 +124,8 @@ function AnswerCard({ data, index }: { data: AnswerFeedback; index: number }) {
     )
 }
 
-export default function ResultsPage({ params }: { params: { id: string } }) {
+export default function ResultsPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = use(params)
     const router = useRouter()
     const supabase = createClient()
     const [session, setSession] = useState<Session | null>(null)
@@ -135,13 +136,13 @@ export default function ResultsPage({ params }: { params: { id: string } }) {
             const { data } = await supabase
                 .from("sessions")
                 .select("*, session_answers(*)")
-                .eq("id", params.id)
+                .eq("id", id)
                 .single()
             setSession(data)
             setLoading(false)
         }
         load()
-    }, [params.id, supabase])
+    }, [id, supabase])
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center" style={{ background: "hsl(216 42% 5%)" }}>

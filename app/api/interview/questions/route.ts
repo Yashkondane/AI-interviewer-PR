@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
                 interview_type === "Technical" ? "technical and role-specific questions only" :
                     "a mix of behavioral and technical questions"
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
         const prompt = `You are an expert interviewer. Generate interview opening questions for ${roleCtx}${companyCtx}.
 Seniority level: ${seniority}. Focus on ${typeCtx}.

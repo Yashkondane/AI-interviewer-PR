@@ -41,16 +41,26 @@ RULES:
 - After 5-6 exchanges, naturally wrap up.`
 
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             systemInstruction,
         })
 
         // Build Gemini chat history
-        // Gemini uses "model" role instead of "assistant"
-        const chatHistory = history.map((h: { role: string; content: string }) => ({
+        // Gemini requires: (1) first message must be role "user", (2) roles must alternate
+        let chatHistory = history.map((h: { role: string; content: string }) => ({
             role: h.role === "assistant" ? "model" : "user",
             parts: [{ text: h.content }],
         }))
+
+        // Gemini REQUIRES the first message to be "user".
+        // Our history starts with the AI's opening question ("model").
+        // Fix: prepend the original "Begin the interview." user message.
+        if (chatHistory.length > 0 && chatHistory[0].role === "model") {
+            chatHistory = [
+                { role: "user", parts: [{ text: "Begin the interview." }] },
+                ...chatHistory,
+            ]
+        }
 
         const chat = model.startChat({
             history: chatHistory,
