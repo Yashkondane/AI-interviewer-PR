@@ -46,18 +46,27 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const transcript = (conversation as { question: string; answer: string }[])
-      .map((e, i) => `Q${i + 1}: ${e.question}\nA${i + 1}: ${e.answer || "(no answer given)"}`)
+    const transcript = (conversation as { turn_index?: number; question: string; answer: string }[])
+      .map((e, i) => `Q${e.turn_index || i + 1}: ${e.question}\nA${e.turn_index || i + 1}: ${e.answer || "(no answer given)"}`)
       .join("\n\n")
 
-    const prompt = `You are an expert interview coach. Analyze this ${role} interview at ${seniority} level.
+    const totalQuestions = conversation.length
 
-Full transcript:
+    const prompt = `You are a warm, insightful interview coach. Analyze this ${role} interview at ${seniority} level.
+
+Full transcript (${totalQuestions} questions):
 ${transcript}
 
-Evaluate the answers and produce a complete scorecard with overall_score (0–100), 
-dimension scores (clarity, structure, relevance, pacing, confidence each 0–100),
-a summary, top_strengths list, areas_to_improve list, and per-answer feedback.`
+INSTRUCTIONS:
+1. Evaluate EVERY question-answer pair. You MUST return exactly ${totalQuestions} items in the "answers" array, one for each Q&A above, in the same order.
+2. For Q1 (usually an introduction or "tell me about yourself"): this IS a real answer. Score the candidate's ability to present themselves clearly, mention relevant experience, and set the tone. Do NOT give it 0.
+3. Use a realistic scoring range. Most decent answers should score 40-80. Reserve 90+ for exceptional responses and below 30 for truly empty/irrelevant answers.
+4. Write feedback as if you're coaching a friend — be specific, encouraging, and actionable. For example: "You gave a great overview of your project, but adding a specific metric (like 'reduced load time by 40%') would make it even stronger."
+5. The "summary" should be 2-3 sentences of overall impression, written warmly but honestly.
+6. "top_strengths" should list 3-5 specific things the candidate did well.
+7. "areas_to_improve" should list 3-5 concrete, actionable improvements.
+
+Produce the complete scorecard with overall_score (0–100), dimension scores (clarity, structure, relevance, pacing, confidence each 0–100), summary, top_strengths, areas_to_improve, and per-answer feedback.`
 
     const result = await model.generateContent(prompt)
     const scorecard = JSON.parse(result.response.text())

@@ -8,6 +8,7 @@ import { Waveform } from "@/components/interview/waveform"
 import { CameraFeed } from "@/components/interview/camera-feed"
 import { useInterview } from "@/hooks/use-interview"
 import { useSpeech } from "@/hooks/use-speech"
+import { createClient } from "@/lib/supabase/client"
 import {
     PhoneOff, Mic, MicOff, VideoOff, Video,
     Loader2, AlertTriangle, WifiOff
@@ -98,9 +99,29 @@ function CamIndicator({ active, error }: { active: boolean; error: string | null
 export default function SessionPage() {
     const router = useRouter()
     const params = useSearchParams()
+    const supabase = createClient()
     const started = useRef(false)
     const [cameraEnded, setCameraEnded] = useState(false)
     const cameraWasActive = useRef(false)
+    const [userName, setUserName] = useState("")
+
+    // Fetch user name on mount
+    useEffect(() => {
+        const fetchName = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("full_name")
+                    .eq("id", user.id)
+                    .single()
+                if (profile?.full_name) {
+                    setUserName(profile.full_name.split(" ")[0]) // First name only
+                }
+            }
+        }
+        fetchName()
+    }, [supabase])
 
     const config = {
         role: params.get("role") || "SWE",
@@ -108,10 +129,11 @@ export default function SessionPage() {
         seniority: params.get("seniority") || "Mid",
         interview_type: params.get("type") || "Behavioral",
         duration_mins: Number(params.get("duration") || 15),
+        userName: userName || undefined,
     }
 
     const {
-        status, exchanges, currentQuestion,
+        status, exchanges, currentQuestion, sessionId,
         elapsedSeconds, isSpeaking, isListening,
         interimTranscript,
         cameraState, videoRef,
@@ -129,6 +151,13 @@ export default function SessionPage() {
         }
         return () => stopVolumeAnalyzer()
     }, [startInterview, startVolumeAnalyzer, stopVolumeAnalyzer])
+
+    // Auto-redirect to results when interview is done
+    useEffect(() => {
+        if (status === "done" && sessionId) {
+            router.push(`/interview/results/${sessionId}`)
+        }
+    }, [status, sessionId, router])
 
     // Watch for camera being turned off mid-interview
     // Only trigger if camera was previously active (avoids false positives on startup)

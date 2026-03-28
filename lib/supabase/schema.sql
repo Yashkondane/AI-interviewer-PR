@@ -41,6 +41,10 @@ create table if not exists public.sessions (
   eye_contact    int,
   posture        int,
   expression     int,
+  -- High-level analysis
+  overall_summary  text,
+  top_strengths    text[],
+  areas_to_improve text[],
   -- State
   status         text not null default 'in_progress', -- 'in_progress' | 'completed'
   completed_at   timestamptz,
@@ -79,23 +83,28 @@ alter table public.session_answers enable row level security;
 alter table public.question_cache enable row level security;
 
 -- Profiles: users can only see/edit their own
+drop policy if exists "profiles_own" on public.profiles;
 create policy "profiles_own" on public.profiles
   for all using (auth.uid() = id);
 
 -- Sessions: users can only see their own
+drop policy if exists "sessions_own" on public.sessions;
 create policy "sessions_own" on public.sessions
   for all using (auth.uid() = user_id);
 
 -- Answers: accessible through session ownership
+drop policy if exists "answers_own" on public.session_answers;
 create policy "answers_own" on public.session_answers
   for all using (
     exists (select 1 from public.sessions s where s.id = session_id and s.user_id = auth.uid())
   );
 
 -- Question cache: readable by all authenticated users
+drop policy if exists "cache_read" on public.question_cache;
 create policy "cache_read" on public.question_cache
   for select using (auth.role() = 'authenticated');
 
+drop policy if exists "cache_insert" on public.question_cache;
 create policy "cache_insert" on public.question_cache
   for insert with check (auth.role() = 'authenticated');
 

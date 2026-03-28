@@ -4,13 +4,23 @@ import { use, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { ArrowRight, RefreshCw, LayoutDashboard, ChevronDown, ChevronUp } from "lucide-react"
+import { 
+    ArrowRight, 
+    RefreshCw, 
+    LayoutDashboard, 
+    ChevronDown, 
+    ChevronUp, 
+    CheckCircle2, 
+    Target, 
+    Sparkles 
+} from "lucide-react"
 
 interface AnswerFeedback {
     question: string
     answer: string
     feedback: string
     score: number
+    turn_index: number
 }
 
 interface Session {
@@ -28,6 +38,9 @@ interface Session {
     eye_contact: number
     posture: number
     expression: number
+    overall_summary: string
+    top_strengths: string[]
+    areas_to_improve: string[]
     session_answers: AnswerFeedback[]
 }
 
@@ -201,12 +214,78 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
                     </div>
                 </div>
 
+                {/* ── Expert Analysis Summary ── */}
+                {session.overall_summary && (
+                    <div className="rounded-3xl p-8 flex flex-col gap-4 relative overflow-hidden"
+                        style={{ background: "rgba(12,22,44,0.75)", border: "1px solid rgba(59,130,246,0.12)", backdropFilter: "blur(20px)" }}>
+                        {/* Sparkle decorative element */}
+                        <div className="absolute top-0 right-0 p-6 opacity-20">
+                            <Sparkles className="h-12 w-12 text-primary" />
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-primary">
+                            <Sparkles className="h-4 w-4" />
+                            <h2 className="text-xs font-bold uppercase tracking-widest">Expert Analysis</h2>
+                        </div>
+                        <p className="text-foreground/90 text-lg leading-relaxed font-medium">
+                            {session.overall_summary}
+                        </p>
+                    </div>
+                )}
+
+                {/* ── Strengths & Growth ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Strengths */}
+                    <div className="rounded-3xl p-6 flex flex-col gap-4"
+                        style={{ background: "rgba(52,211,153,0.04)", border: "1px solid rgba(52,211,153,0.15)" }}>
+                        <div className="flex items-center gap-2 text-emerald-400">
+                            <CheckCircle2 className="h-5 w-5" />
+                            <h3 className="font-semibold">Top Strengths</h3>
+                        </div>
+                        <ul className="flex flex-col gap-3">
+                            {(session.top_strengths || []).length > 0 ? (
+                                session.top_strengths.map((s, i) => (
+                                    <li key={i} className="flex items-start gap-3">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-2 shrink-0" />
+                                        <span className="text-foreground/80 text-sm leading-snug">{s}</span>
+                                    </li>
+                                ))
+                            ) : (
+                                <li className="text-muted-foreground text-xs italic">Analyzing your performance...</li>
+                            )}
+                        </ul>
+                    </div>
+
+                    {/* Areas for Improvement */}
+                    <div className="rounded-3xl p-6 flex flex-col gap-4"
+                        style={{ background: "rgba(251,191,36,0.04)", border: "1px solid rgba(251,191,36,0.15)" }}>
+                        <div className="flex items-center gap-2 text-amber-400">
+                            <Target className="h-5 w-5" />
+                            <h3 className="font-semibold">Areas for Growth</h3>
+                        </div>
+                        <ul className="flex flex-col gap-3">
+                            {(session.areas_to_improve || []).length > 0 ? (
+                                session.areas_to_improve.map((s, i) => (
+                                    <li key={i} className="flex items-start gap-3">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-amber-400 mt-2 shrink-0" />
+                                        <span className="text-foreground/80 text-sm leading-snug">{s}</span>
+                                    </li>
+                                ))
+                            ) : (
+                                <li className="text-muted-foreground text-xs italic">Refining your target areas...</li>
+                            )}
+                        </ul>
+                    </div>
+                </div>
+
                 {/* Per-question feedback */}
                 <div className="flex flex-col gap-3">
                     <h2 className="text-foreground font-semibold">Question-by-Question Feedback</h2>
-                    {(session.session_answers || []).map((ans, i) => (
-                        <AnswerCard key={i} data={ans} index={i} />
-                    ))}
+                    {(session.session_answers || [])
+                        .sort((a, b) => a.turn_index - b.turn_index)
+                        .map((ans, i) => (
+                            <AnswerCard key={i} data={ans} index={i} />
+                        ))}
                 </div>
 
                 {/* CTAs */}

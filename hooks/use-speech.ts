@@ -31,6 +31,7 @@ export function useSpeech(options: SpeechOptions = {}) {
     const analyzerRef = useRef<AnalyserNode | null>(null)
     const micStreamRef = useRef<MediaStream | null>(null)
     const rafRef = useRef<number>(0)
+    const shouldRestartRef = useRef(true)
 
     // ── Volume analyzer via Web Audio API ───────────────────────
     const startVolumeAnalyzer = useCallback(async () => {
@@ -154,7 +155,10 @@ export function useSpeech(options: SpeechOptions = {}) {
             recognition.continuous = true
             recognition.interimResults = true
             recognition.lang = "en-US"
+            recognition.maxAlternatives = 1
             let finalTranscript = ""
+            shouldRestartRef.current = true  // Allow auto-restart
+            let lastSpeechTime = Date.now()
 
             recognition.onstart = () => setIsListening(true)
 
@@ -170,22 +174,50 @@ export function useSpeech(options: SpeechOptions = {}) {
                 }
                 setTranscript(finalTranscript.trim())
                 setInterimTranscript(interim)
+                lastSpeechTime = Date.now()
 
-                // Auto-stop after 2.5s of silence
+                // Auto-stop after 5s of silence (increased from 2.5s for longer answers)
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-                silenceTimerRef.current = setTimeout(() => recognition.stop(), 2500)
+                silenceTimerRef.current = setTimeout(() => {
+                    shouldRestartRef.current = false  // This is a genuine end from silence
+                    recognition.stop()
+                }, 5000)
             }
 
             recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
                 if (e.error === "not-allowed") setMicBlocked(true)
-                setIsListening(false)
-                resolve(finalTranscript.trim() || "")
+                // "no-speech" and "network" errors are recoverable — let onend restart
+                if (e.error === "not-allowed" || e.error === "aborted") {
+                    shouldRestartRef.current = false
+                    setIsListening(false)
+                    resolve(finalTranscript.trim() || "")
+                }
             }
 
             recognition.onend = () => {
+                // Chrome's Web Speech API often fires onend prematurely during long speech
+                // (network blips, breath pauses, etc). Auto-restart if we haven't
+                // explicitly asked to stop.
+                const timeSinceLastSpeech = Date.now() - lastSpeechTime
+
+                if (shouldRestartRef.current && timeSinceLastSpeech < 5000) {
+                    // Premature end — restart to keep capturing
+                    try {
+                        recognition.start()
+                        return
+                    } catch {
+                        // If restart fails, fall through and resolve
+                    }
+                }
+
+                // Genuine end (silence timeout or explicit stop)
                 setIsListening(false)
                 setInterimTranscript("")
-                resolve(finalTranscript.trim())
+                if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+
+                // If transcript is very short, it might be a false capture
+                const result = finalTranscript.trim()
+                resolve(result || "")
             }
 
             recognition.start()
@@ -194,6 +226,7 @@ export function useSpeech(options: SpeechOptions = {}) {
 
     const stopListening = useCallback(() => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+        shouldRestartRef.current = false  // Prevent auto-restart
         recognitionRef.current?.stop()
         setIsListening(false)
     }, [])

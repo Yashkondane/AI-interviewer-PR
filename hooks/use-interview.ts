@@ -23,6 +23,7 @@ export interface InterviewConfig {
     seniority: string
     interview_type: string
     duration_mins: number
+    userName?: string
 }
 
 export function useInterview(config: InterviewConfig) {
@@ -43,7 +44,8 @@ export function useInterview(config: InterviewConfig) {
     const exchangesRef = useRef<Exchange[]>([])
     const exchangeCountRef = useRef(0)
     const isEndingRef = useRef(false)
-    const maxExchangesRef = useRef(Math.floor(config.duration_mins * 1.2))
+    const maxExchangesRef = useRef(Math.max(8, Math.ceil(config.duration_mins * 2)))
+    const elapsedSecondsRef = useRef(0)
 
     // Keep a ref to the latest speech hook so recursive calls always get fresh references
     const speechRef = useRef(speechHook)
@@ -85,11 +87,17 @@ export function useInterview(config: InterviewConfig) {
         let scorecard = null
         if (currentExchanges.length > 0) {
             try {
+                // Number the exchanges so the scorecard can reference them
+                const numberedConversation = currentExchanges.map((e, i) => ({
+                    turn_index: i + 1,
+                    question: e.question,
+                    answer: e.answer,
+                }))
                 const res = await fetch("/api/interview/scorecard", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        conversation: currentExchanges,
+                        conversation: numberedConversation,
                         role: config.role,
                         seniority: config.seniority,
                     }),
@@ -101,27 +109,50 @@ export function useInterview(config: InterviewConfig) {
         }
 
         if (currentSessionId && scorecard) {
-            await supabase.from("sessions").update({
-                status: "completed",
-                completed_at: new Date().toISOString(),
-                overall_score: scorecard.overall_score,
-                clarity: scorecard.dimensions?.clarity,
-                structure: scorecard.dimensions?.structure,
-                relevance: scorecard.dimensions?.relevance,
-                pacing: scorecard.dimensions?.pacing,
-                confidence: scorecard.dimensions?.confidence,
-                camera_score: cameraScore,
-                eye_contact: cameraAvg.eye_contact,
-                posture: cameraAvg.posture,
-                expression: cameraAvg.expression,
-            }).eq("id", currentSessionId)
+            try {
+                await supabase.from("sessions").update({
+                    status: "completed",
+                    completed_at: new Date().toISOString(),
+                    overall_score: scorecard.overall_score,
+                    clarity: scorecard.dimensions?.clarity,
+                    structure: scorecard.dimensions?.structure,
+                    relevance: scorecard.dimensions?.relevance,
+                    pacing: scorecard.dimensions?.pacing,
+                    confidence: scorecard.dimensions?.confidence,
+                    camera_score: cameraScore,
+                    eye_contact: cameraAvg.eye_contact,
+                    posture: cameraAvg.posture,
+                    expression: cameraAvg.expression,
+                    overall_summary: scorecard.summary,
+                    top_strengths: scorecard.top_strengths,
+                    areas_to_improve: scorecard.areas_to_improve,
+                }).eq("id", currentSessionId)
+            } catch (err) {
+                console.error("Failed to update session scores:", err)
+                // Fallback: at least mark as completed if possible
+                await supabase.from("sessions").update({ status: "completed" }).eq("id", currentSessionId)
+            }
 
-            if (scorecard.answers) {
-                for (const ans of scorecard.answers) {
-                    await supabase.from("session_answers")
-                        .update({ feedback: ans.feedback, score: ans.score })
-                        .eq("session_id", currentSessionId)
-                        .eq("question", ans.question)
+            if (scorecard.answers && scorecard.answers.length > 0) {
+                // Fetch ALL session answers ordered by turn_index
+                const { data: dbAnswers } = await supabase
+                    .from("session_answers")
+                    .select("id, turn_index")
+                    .eq("session_id", currentSessionId)
+                    .order("turn_index", { ascending: true })
+
+                if (dbAnswers && dbAnswers.length > 0) {
+                    // Match scorecard answers to DB rows by position
+                    for (let i = 0; i < scorecard.answers.length && i < dbAnswers.length; i++) {
+                        try {
+                            await supabase.from("session_answers")
+                                .update({
+                                    feedback: scorecard.answers[i].feedback,
+                                    score: scorecard.answers[i].score,
+                                })
+                                .eq("id", dbAnswers[i].id)
+                        } catch (_) { }
+                    }
                 }
             }
         }
@@ -134,7 +165,11 @@ export function useInterview(config: InterviewConfig) {
     // ── Single turn (NOT useCallback — stored in a ref for recursion) ──
     const doTurn = async (userAnswer: string | null): Promise<void> => {
         if (isEndingRef.current) return
-        if (exchangeCountRef.current >= maxExchangesRef.current) {
+
+        // Only end by exchange count if we're also past 80% of the scheduled time
+        const totalSecs = config.duration_mins * 60
+        const timeRemaining = totalSecs - elapsedSecondsRef.current
+        if (exchangeCountRef.current >= maxExchangesRef.current && timeRemaining < 30) {
             await doEndInterview()
             return
         }
@@ -158,8 +193,14 @@ export function useInterview(config: InterviewConfig) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     role: config.role,
+                    interviewType: config.interview_type,
+                    seniority: config.seniority,
+                    durationMins: config.duration_mins,
+                    elapsedSeconds: elapsedSecondsRef.current,
+                    exchangeCount: exchangeCountRef.current,
                     history: historyRef.current,
                     currentAnswer: userAnswer,
+                    userName: config.userName || "the candidate",
                 }),
             })
             const data = await res.json()
@@ -173,6 +214,17 @@ export function useInterview(config: InterviewConfig) {
             return
         }
 
+        // ── Check for concluding keywords ──
+        // Only trigger if we're past 80% of the scheduled time to prevent premature endings
+        const totalSecs2 = config.duration_mins * 60
+        const pctDone = (elapsedSecondsRef.current / totalSecs2) * 100
+        const lowerAi = aiText.toLowerCase()
+        const isConcluding = pctDone >= 80 && (
+            (lowerAi.includes("concl") && (lowerAi.includes("interview") || lowerAi.includes("session"))) ||
+            lowerAi.includes("thank you for your time today") ||
+            (lowerAi.includes("best of luck") && exchangeCountRef.current > 3)
+        )
+
         setCurrentQuestion(aiText)
         historyRef.current.push({ role: "assistant", content: aiText })
 
@@ -183,6 +235,12 @@ export function useInterview(config: InterviewConfig) {
         await speechRef.current.speak(aiText)
 
         if (isEndingRef.current) return
+
+        // If the AI just gave its final closing statement, end here
+        if (isConcluding) {
+            await doEndInterview()
+            return
+        }
 
         setStatus("user-listening")
         speechRef.current.resetTranscript()
@@ -222,7 +280,7 @@ export function useInterview(config: InterviewConfig) {
         isEndingRef.current = false
         exchangeCountRef.current = 0
         historyRef.current = []
-        maxExchangesRef.current = Math.floor(config.duration_mins * 1.2)
+        maxExchangesRef.current = Math.max(8, Math.ceil(config.duration_mins * 2))
 
         await startCamera()
 
@@ -248,7 +306,18 @@ export function useInterview(config: InterviewConfig) {
         }
 
         timerRef.current = setInterval(() => {
-            setElapsedSeconds(s => s + 1)
+            setElapsedSeconds(s => {
+                const next = s + 1
+                elapsedSecondsRef.current = next
+                
+                // Auto-end safety: if we're 45s past the scheduled time, trigger end
+                const maxSeconds = config.duration_mins * 60 + 45
+                if (next >= maxSeconds && !isEndingRef.current && status !== "done") {
+                    doEndInterview()
+                }
+                
+                return next
+            })
         }, 1000)
 
         await doTurnRef.current(null)
