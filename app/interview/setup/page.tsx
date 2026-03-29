@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight, Video, Briefcase, Clock, LogIn, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -81,9 +81,25 @@ export default function SetupPage() {
         seniority: "Mid",
         interview_type: "Behavioral",
         duration_mins: 15,
+        focus: "topic", // 'topic' | 'resume'
+        custom_topics: "",
     })
     const [showAuthCheck, setShowAuthCheck] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [hasResume, setHasResume] = useState(false)
+
+    // Check for resume on mount
+    useEffect(() => {
+        const check = async () => {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const { data: profile } = await supabase.from("profiles").select("resume_data").eq("id", user.id).single()
+                if (profile?.resume_data) setHasResume(true)
+            }
+        }
+        check()
+    }, [])
 
     const startSession = () => {
         setLoading(true)
@@ -93,6 +109,8 @@ export default function SetupPage() {
             seniority: config.seniority,
             type: config.interview_type,
             duration: String(config.duration_mins),
+            focus: config.focus,
+            custom_topics: config.custom_topics,
         })
         router.push(`/interview/session?${params}`)
     }
@@ -182,6 +200,50 @@ export default function SetupPage() {
                         </div>
 
                         <SelectGroup label="Seniority" options={SENIORITIES} value={config.seniority} onChange={v => set("seniority", v)} />
+                        
+                        {/* Focus Mode */}
+                        <div className="flex flex-col gap-2">
+                            <p className="text-foreground text-sm font-medium">Interview Focus</p>
+                            <div className="flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/10 w-fit">
+                                <button
+                                    onClick={() => set("focus", "topic")}
+                                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all"
+                                    style={{
+                                        background: config.focus === "topic" ? "rgba(59,130,246,0.2)" : "transparent",
+                                        color: config.focus === "topic" ? "#fff" : "hsl(215 14% 50%)"
+                                    }}
+                                >
+                                    Specific Topics
+                                </button>
+                                <button
+                                    onClick={() => set("focus", "resume")}
+                                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2"
+                                    style={{
+                                        background: config.focus === "resume" ? "rgba(59,130,246,0.2)" : "transparent",
+                                        color: config.focus === "resume" ? "#fff" : "hsl(215 14% 50%)"
+                                    }}
+                                >
+                                    My Resume
+                                    {!hasResume && <span className="text-[10px] text-amber-500 font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">Missing</span>}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Custom topics if in topic mode */}
+                        {config.focus === "topic" && (
+                            <div className="flex flex-col gap-2">
+                                <p className="text-foreground text-sm font-medium">What should we focus on?</p>
+                                <input
+                                    type="text"
+                                    value={config.custom_topics}
+                                    onChange={e => set("custom_topics", e.target.value)}
+                                    placeholder="e.g. React hooks, distributed systems, system design…"
+                                    className="rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
+                                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                                />
+                            </div>
+                        )}
+
                         <SelectGroup label="Interview Type" options={TYPES} value={config.interview_type} onChange={v => set("interview_type", v)} />
                         <SelectGroup label="Duration" options={DURATIONS} value={config.duration_mins} onChange={v => set("duration_mins", Number(v))} />
 

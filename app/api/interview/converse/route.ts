@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { createClient } from "@/lib/supabase/server"
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
@@ -226,11 +227,40 @@ function buildSystemPrompt(
     durationMins: number,
     elapsedSeconds: number,
     exchangeCount: number,
-    userName: string
+    userName: string,
+    focus?: string,
+    customTopics?: string,
+    resumeData?: any
 ): string {
     const persona = PERSONAS[role] || PERSONAS["Default"]
     const type = interviewType || "Behavioral"
-    const topics = persona.topics[type] || persona.topics["Behavioral"]
+    let topics = persona.topics[type] || persona.topics["Behavioral"]
+
+    // Override topics based on focus
+    if (focus === "topic" && customTopics) {
+        topics = [
+            ...customTopics.split(",").map(t => t.trim()),
+            ...topics.slice(0, 3) // Mix in a few standard ones
+        ]
+    } else if (focus === "resume" && resumeData) {
+        const getRandomItem = (arr: any[]) => arr && arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : null;
+        
+        const randomProject = getRandomItem(resumeData.projects);
+        const randomExperience = getRandomItem(resumeData.experience);
+        const randomEducation = getRandomItem(resumeData.education);
+        const randomAchievement = getRandomItem(resumeData.achievements);
+        
+        const dynamicTopics = [];
+        if (randomProject) dynamicTopics.push("your project: " + randomProject.name);
+        if (randomExperience) dynamicTopics.push("your role at " + randomExperience.company);
+        if (randomEducation) dynamicTopics.push("your time at " + randomEducation.institution);
+        if (randomAchievement) dynamicTopics.push("your achievement: " + randomAchievement);
+
+        topics = [
+            ...dynamicTopics.sort(() => 0.5 - Math.random()),
+            ...topics.slice(0, 3)
+        ]
+    }
 
     const totalSeconds = durationMins * 60
     const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
@@ -270,6 +300,25 @@ Do NOT ask any more technical or behavioral questions.`
     return `${persona.identity}
 
 Your name is Sarah. The candidate's name is ${userName}.
+
+${focus === "resume" && resumeData ? `
+═══════════════════════════════════════════
+CANDIDATE PROFILE (FROM RESUME)
+═══════════════════════════════════════════
+• Projects: ${resumeData.projects?.map((p: any) => p.name).join(", ")}
+• Skills: ${resumeData.skills?.join(", ")}
+• Experience: ${resumeData.experience?.map((e: any) => e.company).join(", ")}
+• Education: ${resumeData.education?.map((ed: any) => ed.institution).join(", ")}
+
+You MUST ask specific questions about these resume items during the CORE phase.
+IMPORTANT: Do NOT ask about these items in a predictable or linear order. Bounce around the resume randomly. Start with whatever catches your eye first.` : ""}
+
+${focus === "topic" && customTopics ? `
+═══════════════════════════════════════════
+INTERVIEW FOCUS: ${customTopics}
+═══════════════════════════════════════════
+Prioritize asking deeply technical questions about these specific topics.
+` : ""}
 
 ═══════════════════════════════════════════
 INTERVIEW CONTEXT
@@ -313,11 +362,13 @@ CORE BEHAVIOR RULES
 10. Speak naturally like a real person having a conversation. Use contractions ("I'd", "you've", "that's"). Be warm but professional.
 
 ═══════════════════════════════════════════
-RESPONSE FORMAT
+RESPONSE FORMAT (STRICT)
 ═══════════════════════════════════════════
 - Brief, warm acknowledgment of their answer (1 sentence)
 - Your next question
 - Nothing else. No explanations, no teaching, no multi-paragraph responses.
+- CRITICAL: EVERY SINGLE RESPONSE MUST END WITH A QUESTION FOR THE CANDIDATE. Never simply acknowledge their answer and stop. You MUST ask the next interview question!
+- If the candidate's resume shows NO WORK EXPERIENCE, DO NOT ask them about previous jobs or managers. Instead, ask them about their personal projects, academic challenges, extracurriculars, or behavioral scenarios ("Tell me about a time you faced a challenge...").
 
 IMPORTANT: Do NOT break character. You are Sarah, a real human interviewer, not an AI assistant.`
 }
@@ -335,10 +386,26 @@ export async function POST(req: NextRequest) {
             elapsedSeconds = 0,
             exchangeCount = 0,
             userName = "the candidate",
+            focus = "topic",
+            customTopics = "",
         } = await req.json()
 
+        let resumeData = null
+        if (focus === "resume") {
+            const supabase = await createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("resume_data")
+                    .eq("id", user.id)
+                    .single()
+                resumeData = profile?.resume_data
+            }
+        }
+
         const systemInstruction = buildSystemPrompt(
-            role, interviewType, seniority, durationMins, elapsedSeconds, exchangeCount, userName
+            role, interviewType, seniority, durationMins, elapsedSeconds, exchangeCount, userName, focus, customTopics, resumeData
         )
 
         const model = genAI.getGenerativeModel({

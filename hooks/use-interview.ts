@@ -24,6 +24,8 @@ export interface InterviewConfig {
     interview_type: string
     duration_mins: number
     userName?: string
+    focus?: string
+    custom_topics?: string
 }
 
 export function useInterview(config: InterviewConfig) {
@@ -66,6 +68,7 @@ export function useInterview(config: InterviewConfig) {
         isEndingRef.current = true
 
         setStatus("processing")
+        speechRef.current.stopSpeaking()
         speechRef.current.stopListening()
         stopCamera()
         if (timerRef.current) clearInterval(timerRef.current)
@@ -108,32 +111,38 @@ export function useInterview(config: InterviewConfig) {
             } catch (_) { /* ignore scoring errors */ }
         }
 
-        if (currentSessionId && scorecard) {
+        if (currentSessionId) {
             try {
-                await supabase.from("sessions").update({
+                const updatePayload: any = {
                     status: "completed",
                     completed_at: new Date().toISOString(),
-                    overall_score: scorecard.overall_score,
-                    clarity: scorecard.dimensions?.clarity,
-                    structure: scorecard.dimensions?.structure,
-                    relevance: scorecard.dimensions?.relevance,
-                    pacing: scorecard.dimensions?.pacing,
-                    confidence: scorecard.dimensions?.confidence,
                     camera_score: cameraScore,
                     eye_contact: cameraAvg.eye_contact,
                     posture: cameraAvg.posture,
                     expression: cameraAvg.expression,
-                    overall_summary: scorecard.summary,
-                    top_strengths: scorecard.top_strengths,
-                    areas_to_improve: scorecard.areas_to_improve,
-                }).eq("id", currentSessionId)
+                }
+                
+                if (scorecard) {
+                    updatePayload.overall_score = scorecard.overall_score
+                    updatePayload.clarity = scorecard.dimensions?.clarity
+                    updatePayload.structure = scorecard.dimensions?.structure
+                    updatePayload.relevance = scorecard.dimensions?.relevance
+                    updatePayload.pacing = scorecard.dimensions?.pacing
+                    updatePayload.confidence = scorecard.dimensions?.confidence
+                    updatePayload.overall_summary = scorecard.summary
+                    updatePayload.top_strengths = scorecard.top_strengths
+                    updatePayload.areas_to_improve = scorecard.areas_to_improve
+                }
+                
+                await supabase.from("sessions").update(updatePayload).eq("id", currentSessionId)
+                
             } catch (err) {
                 console.error("Failed to update session scores:", err)
                 // Fallback: at least mark as completed if possible
                 await supabase.from("sessions").update({ status: "completed" }).eq("id", currentSessionId)
             }
 
-            if (scorecard.answers && scorecard.answers.length > 0) {
+            if (scorecard?.answers && scorecard.answers.length > 0) {
                 // Fetch ALL session answers ordered by turn_index
                 const { data: dbAnswers } = await supabase
                     .from("session_answers")
@@ -201,6 +210,8 @@ export function useInterview(config: InterviewConfig) {
                     history: historyRef.current,
                     currentAnswer: userAnswer,
                     userName: config.userName || "the candidate",
+                    focus: config.focus,
+                    customTopics: config.custom_topics,
                 }),
             })
             const data = await res.json()

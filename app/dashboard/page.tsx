@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Star, LayoutDashboard, LogOut } from "lucide-react"
+import { Plus, Star, LayoutDashboard, LogOut, User, FileText } from "lucide-react"
 
 interface Session {
     id: string
@@ -36,7 +36,7 @@ export default function DashboardPage() {
     const router = useRouter()
     const supabase = createClient()
     const [sessions, setSessions] = useState<Session[]>([])
-    const [user, setUser] = useState<{ full_name: string } | null>(null)
+    const [user, setUser] = useState<{ full_name: string; resume_data: any } | null>(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -44,7 +44,7 @@ export default function DashboardPage() {
             const { data: { user: u } } = await supabase.auth.getUser()
             if (!u) { router.push("/auth/login"); return }
 
-            const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", u.id).single()
+            const { data: profile } = await supabase.from("profiles").select("full_name, resume_data").eq("id", u.id).single()
             setUser(profile)
 
             const { data: s } = await supabase
@@ -89,6 +89,12 @@ export default function DashboardPage() {
                         <span className="text-foreground font-semibold">Dashboard</span>
                     </div>
                     <div className="flex items-center gap-3">
+                        <Link href="/dashboard/profile">
+                            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary gap-1.5 transition-colors">
+                                <User className="h-4 w-4" />
+                                Profile
+                            </Button>
+                        </Link>
                         {user && <span className="text-muted-foreground text-sm">Hi, {user.full_name?.split(" ")[0] || "there"} 👋</span>}
                         <Button onClick={handleLogout} variant="ghost" size="sm"
                             className="text-muted-foreground hover:text-foreground gap-1.5">
@@ -97,6 +103,31 @@ export default function DashboardPage() {
                         </Button>
                     </div>
                 </div>
+
+                {/* Resume Status CTA */}
+                {!loading && !user?.resume_data && (
+                    <Link href="/dashboard/profile">
+                        <div className="rounded-3xl p-6 flex items-center justify-between group transition-all duration-300 hover:scale-[1.005]"
+                            style={{ 
+                                background: "linear-gradient(90deg, rgba(59,130,246,0.1), rgba(37,99,235,0.1))", 
+                                border: "1px solid rgba(59,130,246,0.2)",
+                                boxShadow: "0 0 40px rgba(59,130,246,0.05)"
+                            }}>
+                            <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                                    <FileText className="h-5 w-5 text-primary" />
+                                </div>
+                                <div>
+                                    <h3 className="text-foreground font-semibold">Complete your profile</h3>
+                                    <p className="text-muted-foreground text-sm">Upload your resume for a more personalized interview experience.</p>
+                                </div>
+                            </div>
+                            <Button variant="secondary" size="sm" className="rounded-xl group-hover:bg-primary group-hover:text-white transition-all">
+                                Upload Resume
+                            </Button>
+                        </div>
+                    </Link>
+                )}
 
                 {/* Stats */}
                 {sessions.length > 0 && (
@@ -151,7 +182,7 @@ export default function DashboardPage() {
                                             <span className="text-muted-foreground text-xs">{s.seniority} · {s.interview_type}</span>
                                             <span className="text-muted-foreground text-xs">·</span>
                                             <span className="text-muted-foreground text-xs">
-                                                {new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                                {new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })} at {new Date(s.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                                             </span>
                                         </div>
                                     </div>

@@ -130,6 +130,8 @@ export default function SessionPage() {
         interview_type: params.get("type") || "Behavioral",
         duration_mins: Number(params.get("duration") || 15),
         userName: userName || undefined,
+        focus: params.get("focus") || "topic",
+        custom_topics: params.get("custom_topics") || "",
     }
 
     const {

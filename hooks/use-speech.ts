@@ -86,22 +86,52 @@ export function useSpeech(options: SpeechOptions = {}) {
             // Cancel any ongoing speech
             window.speechSynthesis.cancel()
 
-            const utterance = new SpeechSynthesisUtterance(text)
-            utterance.rate = 1.0
-            utterance.pitch = 1.0
-            utterance.volume = 1.0
-            utterance.lang = "en-US"
+            // Split text aggressively into chunks (sentences) to bypass the Chrome 15s freeze bug entirely
+            const chunks = text.match(/[^.!?\n]+[.!?\n]*/g) || [text];
+            let currentChunk = 0;
 
-            // Try to pick a good English voice
             const voices = window.speechSynthesis.getVoices()
             const preferred = voices.find(v => v.name.includes("Google") && v.lang.startsWith("en"))
                 || voices.find(v => v.lang.startsWith("en-US"))
                 || voices.find(v => v.lang.startsWith("en"))
-            if (preferred) utterance.voice = preferred
 
-            utterance.onend = () => { setIsSpeaking(false); resolve(); options.onEnd?.() }
-            utterance.onerror = () => { setIsSpeaking(false); resolve() }
-            window.speechSynthesis.speak(utterance)
+            const speakNext = () => {
+                if (currentChunk >= chunks.length) {
+                    setIsSpeaking(false);
+                    resolve();
+                    options.onEnd?.();
+                    return;
+                }
+
+                const cleanedText = chunks[currentChunk].trim();
+                if (!cleanedText) {
+                    currentChunk++;
+                    speakNext();
+                    return;
+                }
+
+                const utterance = new SpeechSynthesisUtterance(cleanedText);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                utterance.lang = "en-US";
+                if (preferred) utterance.voice = preferred;
+
+                utterance.onend = () => {
+                    currentChunk++;
+                    speakNext();
+                };
+
+                utterance.onerror = (e) => {
+                    // This fires if speech was interrupted via window.speechSynthesis.cancel()
+                    setIsSpeaking(false);
+                    resolve();
+                };
+
+                window.speechSynthesis.speak(utterance);
+            };
+
+            speakNext();
         })
     }, [options])
 
@@ -236,7 +266,13 @@ export function useSpeech(options: SpeechOptions = {}) {
         setInterimTranscript("")
     }, [])
 
-    useEffect(() => () => { stopVolumeAnalyzer() }, [stopVolumeAnalyzer])
+    useEffect(() => {
+        return () => {
+            stopVolumeAnalyzer()
+            stopSpeaking()
+            stopListening()
+        }
+    }, [stopVolumeAnalyzer, stopSpeaking, stopListening])
 
     return {
         speak,
