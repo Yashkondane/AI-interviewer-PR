@@ -45,6 +45,9 @@ create table if not exists public.sessions (
   overall_summary  text,
   top_strengths    text[],
   areas_to_improve text[],
+  -- Evaluation dimensions
+  resume_alignment int,
+  fluency          int,
   -- State
   status         text not null default 'in_progress', -- 'in_progress' | 'completed'
   completed_at   timestamptz,

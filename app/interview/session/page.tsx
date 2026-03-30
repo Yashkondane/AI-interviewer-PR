@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AiOrb } from "@/components/interview/ai-orb"
@@ -97,6 +97,18 @@ function CamIndicator({ active, error }: { active: boolean; error: string | null
 }
 
 export default function SessionPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center" style={{ background: "hsl(216 42% 5%)" }}>
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+            </div>
+        }>
+            <SessionContent />
+        </Suspense>
+    )
+}
+
+function SessionContent() {
     const router = useRouter()
     const params = useSearchParams()
     const supabase = createClient()

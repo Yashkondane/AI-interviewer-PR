@@ -5,6 +5,31 @@ import { useSpeech } from "./use-speech"
 import { useCamera } from "./use-camera"
 import { createClient } from "@/lib/supabase/client"
 
+/**
+ * Reconstruct a text resume from structured resume_data JSON
+ */
+function resumeDataToText(d: any): string {
+    const lines: string[] = []
+    if (d.name) lines.push(d.name)
+    if (d.summary) lines.push(`\nSummary: ${d.summary}`)
+    if (d.skills?.length) lines.push(`\nSkills: ${d.skills.join(", ")}`)
+    if (d.experience?.length) {
+        lines.push("\nExperience:")
+        for (const exp of d.experience) {
+            lines.push(`  ${exp.role} at ${exp.company} (${exp.duration})`)
+            for (const h of exp.highlights || []) lines.push(`    • ${h}`)
+        }
+    }
+    if (d.projects?.length) {
+        lines.push("\nProjects:")
+        for (const proj of d.projects) {
+            lines.push(`  ${proj.name} [${(proj.tech_stack || []).join(", ")}]`)
+            for (const h of proj.highlights || []) lines.push(`    • ${h}`)
+        }
+    }
+    return lines.join("\n")
+}
+
 export type InterviewStatus =
     | "idle"
     | "ai-speaking"
@@ -90,6 +115,15 @@ export function useInterview(config: InterviewConfig) {
         let scorecard = null
         if (currentExchanges.length > 0) {
             try {
+                // Fetch resume data to pass as context
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("resume_data")
+                    .eq("id", (await supabase.auth.getUser()).data.user?.id)
+                    .single()
+                
+                const resume_text = profile?.resume_data ? resumeDataToText(profile.resume_data) : ""
+
                 // Number the exchanges so the scorecard can reference them
                 const numberedConversation = currentExchanges.map((e, i) => ({
                     turn_index: i + 1,
@@ -103,6 +137,7 @@ export function useInterview(config: InterviewConfig) {
                         conversation: numberedConversation,
                         role: config.role,
                         seniority: config.seniority,
+                        resume_text
                     }),
                 })
                 if (res.ok) {
@@ -120,6 +155,9 @@ export function useInterview(config: InterviewConfig) {
                     eye_contact: cameraAvg.eye_contact,
                     posture: cameraAvg.posture,
                     expression: cameraAvg.expression,
+                    // New dimensions - putting in a JSON or existing cols
+                    resume_alignment: scorecard?.dimensions?.resume_alignment,
+                    fluency: scorecard?.dimensions?.fluency,
                 }
                 
                 if (scorecard) {

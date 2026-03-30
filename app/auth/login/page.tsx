@@ -1,14 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Eye, EyeOff, ArrowRight, Chrome } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Chrome, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
 export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center" style={{ background: "hsl(216 42% 5%)" }}>
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
+    )
+}
+
+function LoginForm() {
     const router = useRouter()
     const params = useSearchParams()
     const redirectTo = params.get("redirectTo") || "/dashboard"

@@ -5,7 +5,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 export async function POST(req: NextRequest) {
   try {
-    const { conversation, role, seniority } = await req.json()
+    const { conversation, role, seniority, resume_text } = await req.json()
 
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
                 relevance: { type: SchemaType.NUMBER },
                 pacing: { type: SchemaType.NUMBER },
                 confidence: { type: SchemaType.NUMBER },
+                resume_alignment: { type: SchemaType.NUMBER },
+                fluency: { type: SchemaType.NUMBER },
               },
             },
             summary: { type: SchemaType.STRING },
@@ -51,22 +53,35 @@ export async function POST(req: NextRequest) {
       .join("\n\n")
 
     const totalQuestions = conversation.length
+    const resumeContext = resume_text ? `CANDIDATE RESUME:\n"""\n${resume_text}\n"""` : "No resume provided for cross-referencing."
 
-    const prompt = `You are a warm, insightful interview coach. Analyze this ${role} interview at ${seniority} level.
+    const prompt = `You are a CRITICAL, PROFESSIONAL Interview Coach. Analyze this ${role} interview at ${seniority} level.
 
-Full transcript (${totalQuestions} questions):
+${resumeContext}
+
+TRANSCRIPT:
 ${transcript}
 
-INSTRUCTIONS:
-1. Evaluate EVERY question-answer pair. You MUST return exactly ${totalQuestions} items in the "answers" array, one for each Q&A above, in the same order.
-2. For Q1 (usually an introduction or "tell me about yourself"): this IS a real answer. Score the candidate's ability to present themselves clearly, mention relevant experience, and set the tone. Do NOT give it 0.
-3. Use a realistic scoring range. Most decent answers should score 40-80. Reserve 90+ for exceptional responses and below 30 for truly empty/irrelevant answers.
-4. Write feedback as if you're coaching a friend — be specific, encouraging, and actionable. For example: "You gave a great overview of your project, but adding a specific metric (like 'reduced load time by 40%') would make it even stronger."
-5. The "summary" should be 2-3 sentences of overall impression, written warmly but honestly.
-6. "top_strengths" should list 3-5 specific things the candidate did well.
-7. "areas_to_improve" should list 3-5 concrete, actionable improvements.
+EVALUATION CRITERIA:
+1. **Resume Alignment (0-100)**: 
+   - Cross-reference the answers with the resume. 
+   - Penalty: If the candidate lists a skill (e.g., Python, AWS) but struggles to talk about it or gives an incorrect answer, deduct 20 points from this dimension.
+   - Reward: Honest, deep explanations of resume items.
 
-Produce the complete scorecard with overall_score (0–100), dimension scores (clarity, structure, relevance, pacing, confidence each 0–100), summary, top_strengths, areas_to_improve, and per-answer feedback.`
+2. **Fluency & Filler Analysis (0-100)**:
+   - **Leniency Rule**: Common fillers ("uh", "um", "like", "you know") are allowed. Do NOT penalize for 1-2 uses per answer.
+   - **Penalty Rule**: Deduct points if fillers are **excessive** (appearing in >15% of the total word count) or if they obstruct the meaning.
+   - **Fumbles**: Penalize "false starts" (e.g., "I I I think... wait, no... I focused on...") or losing track of the sentence.
+
+3. **Standard Dimensions (0-100 each)**: Clarity, Structure, Relevance, Pacing, Confidence.
+
+INSTRUCTIONS:
+1. Evaluate EVERY question-answer pair. Return exactly ${totalQuestions} items in "answers".
+2. Write feedback as if you're coaching a high-stakes candidate — specific, direct, and actionable.
+3. If the candidate fumbled a specific answer, mention the exact fumble in "what_to_improve" for that answer.
+4. "summary" should be a high-level expert analysis (2-3 sentences).
+
+Produce the complete JSON response.`
 
     const result = await model.generateContent(prompt)
     const scorecard = JSON.parse(result.response.text())

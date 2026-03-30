@@ -41,6 +41,8 @@ interface Session {
     overall_summary: string
     top_strengths: string[]
     areas_to_improve: string[]
+    resume_alignment: number
+    fluency: number
     session_answers: AnswerFeedback[]
 }
 
@@ -173,8 +175,9 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
         { label: "Clarity", value: session.clarity || 0 },
         { label: "Structure", value: session.structure || 0 },
         { label: "Relevance", value: session.relevance || 0 },
-        { label: "Pacing", value: session.pacing || 0 },
+        { label: "Fluency", value: session.fluency || 0 },
         { label: "Confidence", value: session.confidence || 0 },
+        { label: "Resume Alignment", value: session.resume_alignment || 0 },
     ]
 
     const cameraDims = [

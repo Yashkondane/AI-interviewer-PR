@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Star, LayoutDashboard, LogOut, User, FileText } from "lucide-react"
+import { Plus, Star, LayoutDashboard, LogOut, User, FileText, ScanSearch } from "lucide-react"
 
 interface Session {
     id: string
@@ -152,6 +152,29 @@ export default function DashboardPage() {
                         <Plus className="h-5 w-5" />
                         Start New Interview
                     </Button>
+                </Link>
+
+                {/* ATS Resume Score CTA */}
+                <Link href="/dashboard/ats-score">
+                    <div className="rounded-3xl p-5 flex items-center justify-between group transition-all duration-300 hover:scale-[1.005] cursor-pointer"
+                        style={{
+                            background: "linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.08))",
+                            border: "1px solid rgba(139,92,246,0.2)",
+                            boxShadow: "0 0 40px rgba(139,92,246,0.04)"
+                        }}>
+                        <div className="flex items-center gap-4">
+                            <div className="h-11 w-11 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center group-hover:bg-violet-500/15 transition-colors">
+                                <ScanSearch className="h-5 w-5 text-violet-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-foreground font-semibold text-sm">ATS Resume Score</h3>
+                                <p className="text-muted-foreground text-xs">Get a recruiter-grade score for your resume</p>
+                            </div>
+                        </div>
+                        <Button variant="secondary" size="sm" className="rounded-xl group-hover:bg-violet-500 group-hover:text-white transition-all">
+                            Scan →
+                        </Button>
+                    </div>
                 </Link>
 
                 {/* Session list */}
