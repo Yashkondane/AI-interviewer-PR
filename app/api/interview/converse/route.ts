@@ -430,7 +430,7 @@ export async function POST(req: NextRequest) {
 
         const chat = model.startChat({
             history: chatHistory,
-            generationConfig: { maxOutputTokens: 400, temperature: 0.85 },
+            generationConfig: { maxOutputTokens: 800, temperature: 0.85 },
         })
 
         const userMessage = currentAnswer || "Begin the interview."

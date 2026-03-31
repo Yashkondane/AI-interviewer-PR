@@ -80,6 +80,7 @@ INSTRUCTIONS:
 2. Write feedback as if you're coaching a high-stakes candidate — specific, direct, and actionable.
 3. If the candidate fumbled a specific answer, mention the exact fumble in "what_to_improve" for that answer.
 4. "summary" should be a high-level expert analysis (2-3 sentences).
+5. CRITICAL SCORING INSTRUCTION: You MUST score ALL dimensions (overall_score, clarity, structure, relevance, pacing, confidence, resume_alignment, fluency) realistically from 1 to 100. DO NOT give zeros unless the answer is completely blank or nonsensical. Average answers score 40-70. Great answers score 75-95.
 
 Produce the complete JSON response.`
 
