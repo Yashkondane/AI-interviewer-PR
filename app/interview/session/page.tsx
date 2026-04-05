@@ -238,7 +238,7 @@ function SessionContent() {
                         <div>
                             <h3 className="text-foreground font-semibold text-lg">Camera access required</h3>
                             <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
-                                StormPrep needs your camera to analyze body language. Please allow camera access and refresh the page.
+                                Prepwise needs your camera to analyze body language. Please allow camera access and refresh the page.
                             </p>
                         </div>
                         <div className="flex gap-3 w-full">

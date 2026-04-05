@@ -2,7 +2,7 @@ const testimonials = [
   {
     name: "Priya S.",
     role: "SWE — Offer from Google",
-    quote: "I did 14 mock interviews on StormPrep before my actual Google loop. The voice feedback on my pacing was a game changer.",
+    quote: "I did 14 mock interviews on Prepwise before my actual Google loop. The voice feedback on my pacing was a game changer.",
     avatar: "PS",
     rating: 5,
     company: "Google",
@@ -18,7 +18,7 @@ const testimonials = [
   {
     name: "Lin C.",
     role: "Data Analyst — Offer from Meta",
-    quote: "I used to ramble in interviews. StormPrep's feedback on filler words helped me become concise. Got my offer in 3 weeks.",
+    quote: "I used to ramble in interviews. Prepwise's feedback on filler words helped me become concise. Got my offer in 3 weeks.",
     avatar: "LC",
     rating: 5,
     company: "Meta",
@@ -139,7 +139,7 @@ export default function Testimonials() {
           <span className="gradient-text font-bold">real offers</span>
         </h2>
         <p className="text-muted-foreground mt-4 max-w-md mx-auto text-sm leading-relaxed">
-          2,400+ job seekers landed offers at top companies after practicing with StormPrep.
+          2,400+ job seekers landed offers at top companies after practicing with Prepwise.
         </p>
       </div>
 

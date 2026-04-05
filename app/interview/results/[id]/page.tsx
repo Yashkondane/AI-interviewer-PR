@@ -145,6 +145,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     const supabase = createClient()
     const [session, setSession] = useState<Session | null>(null)
     const [loading, setLoading] = useState(true)
+    const [useHybridScore, setUseHybridScore] = useState(false)
 
     useEffect(() => {
         const load = async () => {
@@ -186,6 +187,10 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
         { label: "Expression", value: session.expression || 0 },
     ]
 
+    const displayedScore = useHybridScore && session.resume_alignment != null
+        ? Math.round((session.overall_score || 0) * 0.8 + session.resume_alignment * 0.2)
+        : (session.overall_score || 0)
+
     return (
         <div className="min-h-screen px-4 py-16" style={{ background: "hsl(216 42% 5%)" }}>
             <div className="max-w-2xl mx-auto flex flex-col gap-8">
@@ -202,7 +207,23 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
                 {/* Score gauge */}
                 <div className="rounded-3xl p-8 flex flex-col items-center gap-6"
                     style={{ background: "rgba(12,22,44,0.75)", border: "1px solid rgba(59,130,246,0.12)", backdropFilter: "blur(20px)" }}>
-                    <ScoreGauge score={session.overall_score || 0} />
+                    <div className="flex flex-col items-center gap-2">
+                        <ScoreGauge score={displayedScore} />
+                        {session.resume_alignment != null && session.resume_alignment > 0 && (
+                            <button
+                                onClick={() => setUseHybridScore(!useHybridScore)}
+                                className="mt-4 flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300"
+                                style={{
+                                    background: useHybridScore ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.03)",
+                                    border: `1px solid ${useHybridScore ? "rgba(139,92,246,0.3)" : "rgba(255,255,255,0.08)"}`,
+                                    color: useHybridScore ? "#c4b5fd" : "hsl(215 14% 60%)"
+                                }}
+                            >
+                                <div className={`w-2 h-2 rounded-full transition-colors ${useHybridScore ? "bg-violet-400" : "bg-muted-foreground/30"}`} />
+                                Hybrid Scoring (80% Interview + 20% Resume)
+                            </button>
+                        )}
+                    </div>
 
                     {/* Two columns */}
                     <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-6">

@@ -19,7 +19,7 @@ const steps = [
     number: "03",
     icon: BrainCircuit,
     title: "AI analyzes your response",
-    description: "StormPrep listens for structure, relevance, pacing, filler words, and confidence in real time as you speak.",
+    description: "Prepwise listens for structure, relevance, pacing, filler words, and confidence in real time as you speak.",
     color: "cyan",
   },
   {

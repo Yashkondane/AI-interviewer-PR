@@ -16,7 +16,7 @@ const syne = Syne({
 })
 
 export const metadata: Metadata = {
-  title: "StormPrep — AI Mock Interviewer",
+  title: "Prepwise — AI Mock Interviewer",
   description:
     "Practice real interviews with your AI voice interviewer. Get instant feedback, land your dream job.",
 }

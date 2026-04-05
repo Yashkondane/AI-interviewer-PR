@@ -6,9 +6,9 @@
   <img src="https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" />
 </p>
 
-# StormPrep — AI Mock Interviewer
+# Prepwise — AI Mock Interviewer
 
-**StormPrep** is a full-stack AI-powered mock interview platform that conducts real, voice-based interviews tailored to your role. It uses **Gemini 2.0 Flash** for conversational AI, **Google Cloud TTS** for natural speech output, the **Web Speech API** for voice input, and **MediaPipe** for real-time body language analysis — all running in the browser.
+**Prepwise** is a full-stack AI-powered mock interview platform that conducts real, voice-based interviews tailored to your role. It uses **Gemini 2.0 Flash** for conversational AI, **Google Cloud TTS** for natural speech output, the **Web Speech API** for voice input, and **MediaPipe** for real-time body language analysis — all running in the browser.
 
 ---
 

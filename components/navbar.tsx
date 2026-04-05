@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { useState, useEffect } from "react"
 import { Menu, X, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -44,17 +45,11 @@ export default function Navbar() {
       >
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="h-8 w-8 rounded-xl bg-primary/90 flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-transform duration-200">
-            <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden>
-              <rect x="6" y="1" width="2" height="12" rx="1" fill="white" />
-              <rect x="3" y="3" width="2" height="8" rx="1" fill="white" opacity="0.7" />
-              <rect x="9" y="3" width="2" height="8" rx="1" fill="white" opacity="0.7" />
-              <rect x="0" y="5" width="2" height="4" rx="1" fill="white" opacity="0.4" />
-              <rect x="12" y="5" width="2" height="4" rx="1" fill="white" opacity="0.4" />
-            </svg>
+          <div className="relative h-10 w-10 md:h-12 md:w-12 group-hover:scale-105 transition-transform duration-300">
+            <Image src="/logo.png" alt="Prepwise Logo" fill className="object-contain" priority />
           </div>
-          <span className="font-bold text-foreground text-lg tracking-tight">
-            Storm<span className="text-primary">Prep</span>
+          <span className="font-bold text-foreground text-xl tracking-tight hidden sm:block">
+            Prep<span className="text-primary">wise</span>
           </span>
         </Link>
 

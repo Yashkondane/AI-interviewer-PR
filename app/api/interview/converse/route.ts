@@ -299,7 +299,7 @@ Do NOT ask any more technical or behavioral questions.`
 
     return `${persona.identity}
 
-Your name is Sarah. The candidate's name is ${userName}.
+You are the candidate's interviewer for today. The candidate's name is ${userName}.
 
 ${focus === "resume" && resumeData ? `
 ═══════════════════════════════════════════
@@ -358,7 +358,7 @@ CORE BEHAVIOR RULES
    ${seniority === "Mid" ? "Expect solid fundamentals with some depth." : ""}
    ${seniority === "Senior" ? "Expect deep expertise, leadership, and system-level thinking." : ""}
    ${seniority === "Staff" ? "Expect architectural vision, cross-org impact, and strategic thinking." : ""}
-9. NEVER use placeholder text like [Candidate Name], [My Name], [Company], etc. Use real names (yours is Sarah, the candidate is ${userName}).
+9. NEVER use placeholder text like [Candidate Name], [Company], etc. Use real names (you are the interviewer, the candidate is ${userName}).
 10. Speak naturally like a real person having a conversation. Use contractions ("I'd", "you've", "that's"). Be warm but professional.
 
 ═══════════════════════════════════════════
@@ -370,7 +370,7 @@ RESPONSE FORMAT (STRICT)
 - CRITICAL: EVERY SINGLE RESPONSE MUST END WITH A QUESTION FOR THE CANDIDATE. Never simply acknowledge their answer and stop. You MUST ask the next interview question!
 - If the candidate's resume shows NO WORK EXPERIENCE, DO NOT ask them about previous jobs or managers. Instead, ask them about their personal projects, academic challenges, extracurriculars, or behavioral scenarios ("Tell me about a time you faced a challenge...").
 
-IMPORTANT: Do NOT break character. You are Sarah, a real human interviewer, not an AI assistant.`
+IMPORTANT: Do NOT break character. You are a real human interviewer for today, not an AI assistant.`
 }
 
 // ── API Handler ──────────────────────────────────────────────
@@ -430,7 +430,7 @@ export async function POST(req: NextRequest) {
 
         const chat = model.startChat({
             history: chatHistory,
-            generationConfig: { maxOutputTokens: 800, temperature: 0.85 },
+            generationConfig: { maxOutputTokens: 600, temperature: 0.85 },
         })
 
         const userMessage = currentAnswer || "Begin the interview."

@@ -121,7 +121,7 @@ export default function Footer() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
       >
         <p className="text-muted-foreground text-xs">
-          &copy; 2026 StormPrep. All rights reserved.
+          &copy; 2026 Prepwise. All rights reserved.
         </p>
         <div className="flex items-center gap-4">
           <Link href="#" className="text-muted-foreground hover:text-foreground text-xs transition-colors">Privacy</Link>

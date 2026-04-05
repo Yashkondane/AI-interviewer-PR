@@ -191,7 +191,7 @@ export default function ProfilePage() {
                         </div>
                         <h2 className="text-lg font-semibold">Resume Source</h2>
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                            Upload your latest resume. Sarah will analyze your specific projects, experience, and skills automatically!
+                            Upload your latest resume. Your interviewer will analyze your specific projects, experience, and skills automatically!
                         </p>
                         
                         <div className="relative">
@@ -453,7 +453,7 @@ export default function ProfilePage() {
                             </div>
                             <h3 className="text-xl font-semibold">No profile data found</h3>
                             <p className="text-muted-foreground text-sm max-w-xs mt-2">
-                                Once you upload your resume, Sarah will use its details to personalize your interview experience.
+                                Once you upload your resume, your interviewer will use its details to personalize your interview experience.
                             </p>
                         </div>
                     )}

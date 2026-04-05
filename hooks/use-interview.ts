@@ -5,31 +5,6 @@ import { useSpeech } from "./use-speech"
 import { useCamera } from "./use-camera"
 import { createClient } from "@/lib/supabase/client"
 
-/**
- * Reconstruct a text resume from structured resume_data JSON
- */
-function resumeDataToText(d: any): string {
-    const lines: string[] = []
-    if (d.name) lines.push(d.name)
-    if (d.summary) lines.push(`\nSummary: ${d.summary}`)
-    if (d.skills?.length) lines.push(`\nSkills: ${d.skills.join(", ")}`)
-    if (d.experience?.length) {
-        lines.push("\nExperience:")
-        for (const exp of d.experience) {
-            lines.push(`  ${exp.role} at ${exp.company} (${exp.duration})`)
-            for (const h of exp.highlights || []) lines.push(`    • ${h}`)
-        }
-    }
-    if (d.projects?.length) {
-        lines.push("\nProjects:")
-        for (const proj of d.projects) {
-            lines.push(`  ${proj.name} [${(proj.tech_stack || []).join(", ")}]`)
-            for (const h of proj.highlights || []) lines.push(`    • ${h}`)
-        }
-    }
-    return lines.join("\n")
-}
-
 export type InterviewStatus =
     | "idle"
     | "ai-speaking"
@@ -73,6 +48,7 @@ export function useInterview(config: InterviewConfig) {
     const isEndingRef = useRef(false)
     const maxExchangesRef = useRef(Math.max(8, Math.ceil(config.duration_mins * 2)))
     const elapsedSecondsRef = useRef(0)
+    const resumeTextRef = useRef<string | null>(null)
 
     // Keep a ref to the latest speech hook so recursive calls always get fresh references
     const speechRef = useRef(speechHook)
@@ -93,7 +69,6 @@ export function useInterview(config: InterviewConfig) {
         isEndingRef.current = true
 
         setStatus("processing")
-        speechRef.current.stopSpeaking()
         speechRef.current.stopListening()
         stopCamera()
         if (timerRef.current) clearInterval(timerRef.current)
@@ -115,15 +90,6 @@ export function useInterview(config: InterviewConfig) {
         let scorecard = null
         if (currentExchanges.length > 0) {
             try {
-                // Fetch resume data to pass as context
-                const { data: profile } = await supabase
-                    .from("profiles")
-                    .select("resume_data")
-                    .eq("id", (await supabase.auth.getUser()).data.user?.id)
-                    .single()
-                
-                const resume_text = profile?.resume_data ? resumeDataToText(profile.resume_data) : ""
-
                 // Number the exchanges so the scorecard can reference them
                 const numberedConversation = currentExchanges.map((e, i) => ({
                     turn_index: i + 1,
@@ -137,7 +103,7 @@ export function useInterview(config: InterviewConfig) {
                         conversation: numberedConversation,
                         role: config.role,
                         seniority: config.seniority,
-                        resume_text
+                        resume_text: resumeTextRef.current,
                     }),
                 })
                 if (res.ok) {
@@ -146,41 +112,34 @@ export function useInterview(config: InterviewConfig) {
             } catch (_) { /* ignore scoring errors */ }
         }
 
-        if (currentSessionId) {
+        if (currentSessionId && scorecard) {
             try {
-                const updatePayload: any = {
+                await supabase.from("sessions").update({
                     status: "completed",
                     completed_at: new Date().toISOString(),
+                    overall_score: scorecard.overall_score,
+                    clarity: scorecard.dimensions?.clarity,
+                    structure: scorecard.dimensions?.structure,
+                    relevance: scorecard.dimensions?.relevance,
+                    pacing: scorecard.dimensions?.pacing,
+                    confidence: scorecard.dimensions?.confidence,
                     camera_score: cameraScore,
                     eye_contact: cameraAvg.eye_contact,
                     posture: cameraAvg.posture,
                     expression: cameraAvg.expression,
-                    // New dimensions - putting in a JSON or existing cols
-                    resume_alignment: scorecard?.dimensions?.resume_alignment,
-                    fluency: scorecard?.dimensions?.fluency,
-                }
-                
-                if (scorecard) {
-                    updatePayload.overall_score = scorecard.overall_score
-                    updatePayload.clarity = scorecard.dimensions?.clarity
-                    updatePayload.structure = scorecard.dimensions?.structure
-                    updatePayload.relevance = scorecard.dimensions?.relevance
-                    updatePayload.pacing = scorecard.dimensions?.pacing
-                    updatePayload.confidence = scorecard.dimensions?.confidence
-                    updatePayload.overall_summary = scorecard.summary
-                    updatePayload.top_strengths = scorecard.top_strengths
-                    updatePayload.areas_to_improve = scorecard.areas_to_improve
-                }
-                
-                await supabase.from("sessions").update(updatePayload).eq("id", currentSessionId)
-                
+                    overall_summary: scorecard.summary,
+                    top_strengths: scorecard.top_strengths,
+                    areas_to_improve: scorecard.areas_to_improve,
+                    resume_alignment: scorecard.dimensions?.resume_alignment,
+                    fluency: scorecard.dimensions?.fluency,
+                }).eq("id", currentSessionId)
             } catch (err) {
                 console.error("Failed to update session scores:", err)
                 // Fallback: at least mark as completed if possible
                 await supabase.from("sessions").update({ status: "completed" }).eq("id", currentSessionId)
             }
 
-            if (scorecard?.answers && scorecard.answers.length > 0) {
+            if (scorecard.answers && scorecard.answers.length > 0) {
                 // Fetch ALL session answers ordered by turn_index
                 const { data: dbAnswers } = await supabase
                     .from("session_answers")
@@ -206,7 +165,7 @@ export function useInterview(config: InterviewConfig) {
 
         setStatus("done")
         return { sessionId: currentSessionId, scorecard, cameraAvg, cameraScore }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [config, scoreHistory, stopCamera])
 
     // ── Single turn (NOT useCallback — stored in a ref for recursion) ──
@@ -335,6 +294,14 @@ export function useInterview(config: InterviewConfig) {
 
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
+            // Fetch resume_data to parse into resumeTextRef if they chose resume focus
+            if (config.focus === "resume") {
+                const { data: profile } = await supabase.from("profiles").select("resume_data").eq("id", user.id).single()
+                if (profile?.resume_data) {
+                    resumeTextRef.current = JSON.stringify(profile.resume_data)
+                }
+            }
+
             const { data: session } = await supabase
                 .from("sessions")
                 .insert({
@@ -358,19 +325,19 @@ export function useInterview(config: InterviewConfig) {
             setElapsedSeconds(s => {
                 const next = s + 1
                 elapsedSecondsRef.current = next
-                
+
                 // Auto-end safety: if we're 45s past the scheduled time, trigger end
                 const maxSeconds = config.duration_mins * 60 + 45
                 if (next >= maxSeconds && !isEndingRef.current && status !== "done") {
                     doEndInterview()
                 }
-                
+
                 return next
             })
         }, 1000)
 
         await doTurnRef.current(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [config, startCamera])
 
     return {
