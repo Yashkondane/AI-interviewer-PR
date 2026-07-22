@@ -21,7 +21,8 @@
 - **Google Meet-style mic/camera indicators** — live volume bars, camera status, and permission warnings
 - **Detailed scorecard** — voice scores (clarity, structure, relevance, pacing, confidence) + body language scores
 - **Per-answer feedback** — every answer gets individual AI coaching
-- **Interactive 3D globe** on the landing page
+- **Interactive 3D globe** on the landing page (built with Three.js & React Three Fiber)
+- **Resume Parsing** — extract context and details from uploaded resumes
 - **Typeform-style onboarding** — gather user goals before sign-up
 - **Supabase Auth** — email/password + Google OAuth
 - **Dashboard** — track all past sessions with score trends
@@ -38,6 +39,9 @@
 | AI Voice Output | Google Cloud Text-to-Speech | ~$4 / 1M chars |
 | User Voice Input | Web Speech API (browser) | Free |
 | Camera Analysis | MediaPipe FaceLandmarker + PoseLandmarker (browser) | Free |
+| State Management| Zustand | Free |
+| 3D Graphics | Three.js + React Three Fiber | Free |
+| Resume Parsing | pdf-parse | Free |
 | Styling | Tailwind CSS + shadcn/ui | Free |
 | Animations | Framer Motion | Free |
 
@@ -61,7 +65,7 @@ Before you begin, make sure you have:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/AI-Mock-interviewer.git
+git clone https://github.com/Yashkondane/AI-Mock-interviewer.git
 cd AI-Mock-interviewer
 ```
 
