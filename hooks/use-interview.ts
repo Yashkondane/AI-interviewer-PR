@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from "react"
 import { useSpeech } from "./use-speech"
 import { useCamera } from "./use-camera"
 import { createClient } from "@/lib/supabase/client"
+import { useCodingStore } from "./use-coding-store"
 
 export type InterviewStatus =
     | "idle"
@@ -26,6 +27,10 @@ export interface InterviewConfig {
     userName?: string
     focus?: string
     custom_topics?: string
+    dsa_enabled?: boolean
+    dsa_only?: boolean
+    cp_level?: string
+    preferred_language?: string
 }
 
 export function useInterview(config: InterviewConfig) {
@@ -53,6 +58,47 @@ export function useInterview(config: InterviewConfig) {
     // Keep a ref to the latest speech hook so recursive calls always get fresh references
     const speechRef = useRef(speechHook)
     speechRef.current = speechHook
+
+    // ── Reusable function to fetch coding questions ──
+    const fetchCodingQuestion = useCallback(() => {
+        useCodingStore.getState().setConsoleOutput("Generating your question...")
+        fetch("/api/coding/generate-question", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                role: config.role,
+                company: config.company,
+                cp_level: config.cp_level || "Intermediate",
+                language: config.preferred_language || "javascript",
+                sessionId: sessionIdRef.current
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.question) {
+                useCodingStore.getState().setQuestion({
+                    sessionId: sessionIdRef.current,
+                    questionId: data.dbId,
+                    title: data.question.title,
+                    difficulty: data.question.difficulty,
+                    statement: data.question.statement,
+                    starterCode: data.question.starter_code,
+                    code: data.question.starter_code,
+                    testCases: data.question.test_cases || [],
+                    visibleTestCases: data.question.test_cases ? data.question.test_cases.slice(0, 2) : [],
+                    language: config.preferred_language || "javascript"
+                })
+                useCodingStore.getState().setConsoleOutput("Question loaded. Good luck!")
+            } else if (data.error) {
+                useCodingStore.getState().setConsoleOutput("Failed to load question: " + data.error)
+                useCodingStore.getState().setQuestion({ title: "Failed to generate problem." })
+            }
+        })
+        .catch(err => {
+            useCodingStore.getState().setConsoleOutput("Failed to load question: " + err.message)
+            useCodingStore.getState().setQuestion({ title: "Failed to load problem." })
+        })
+    }, [config.role, config.company, config.cp_level, config.preferred_language])
 
     // Helper: update exchanges in both state and ref
     const updateExchanges = useCallback((updater: (prev: Exchange[]) => Exchange[]) => {
@@ -172,6 +218,13 @@ export function useInterview(config: InterviewConfig) {
     const doTurn = async (userAnswer: string | null): Promise<void> => {
         if (isEndingRef.current) return
 
+        // If coding mode is active, do NOT continue the conversation loop at all.
+        // The user codes in silence. They can unmute to ask questions manually.
+        if (useCodingStore.getState().isCodingMode) {
+            setStatus("user-listening")
+            return
+        }
+
         // Only end by exchange count if we're also past 80% of the scheduled time
         const totalSecs = config.duration_mins * 60
         const timeRemaining = totalSecs - elapsedSecondsRef.current
@@ -183,6 +236,7 @@ export function useInterview(config: InterviewConfig) {
         setStatus("processing")
 
         if (userAnswer !== null) {
+            historyRef.current.push({ role: "user", content: userAnswer })
             updateExchanges(prev => {
                 const last = prev[prev.length - 1]
                 if (last && !last.answer) {
@@ -209,6 +263,9 @@ export function useInterview(config: InterviewConfig) {
                     userName: config.userName || "the candidate",
                     focus: config.focus,
                     customTopics: config.custom_topics,
+                    isCodingMode: useCodingStore.getState().isCodingMode,
+                    problemTitle: useCodingStore.getState().title,
+                    problemStatement: useCodingStore.getState().statement,
                 }),
             })
             const data = await res.json()
@@ -233,6 +290,20 @@ export function useInterview(config: InterviewConfig) {
             (lowerAi.includes("best of luck") && exchangeCountRef.current > 3)
         )
 
+        // ── Check for coding transition ──
+        if (config.dsa_enabled && !useCodingStore.getState().isCodingMode) {
+            // Trigger if dsa_only is true, or if past 33% of time, or if AI explicitly mentions coding
+            if (config.dsa_only || pctDone >= 33 || lowerAi.includes("coding") || lowerAi.includes("write some code")) {
+                useCodingStore.getState().setCodingMode(true)
+                useCodingStore.getState().setConsoleOutput("Generating your question...")
+                
+                fetchCodingQuestion()
+                
+                // Tell AI to say transitioning text instead of normal response
+                aiText = "Great. Let's now move on to the coding portion of the interview. I'm generating your problem now."
+            }
+        }
+
         setCurrentQuestion(aiText)
         historyRef.current.push({ role: "assistant", content: aiText })
 
@@ -247,6 +318,13 @@ export function useInterview(config: InterviewConfig) {
         // If the AI just gave its final closing statement, end here
         if (isConcluding) {
             await doEndInterview()
+            return
+        }
+
+        // If coding mode is active, stop the conversation loop.
+        // The user codes in silence and can unmute to ask questions manually.
+        if (useCodingStore.getState().isCodingMode) {
+            setStatus("user-listening")
             return
         }
 
@@ -353,5 +431,6 @@ export function useInterview(config: InterviewConfig) {
         videoRef,
         startInterview,
         endInterview: doEndInterview,
+        fetchCodingQuestion,
     }
 }

@@ -230,8 +230,29 @@ function buildSystemPrompt(
     userName: string,
     focus?: string,
     customTopics?: string,
-    resumeData?: any
+    resumeData?: any,
+    isCodingMode?: boolean,
+    problemTitle?: string,
+    problemStatement?: string
 ): string {
+    if (isCodingMode) {
+        return `You are an expert technical interviewer at a top tech company.
+The candidate is currently solving a Data Structures and Algorithms (DSA) coding problem in an integrated code editor.
+
+${problemTitle ? `The problem they are solving is:
+TITLE: ${problemTitle}
+STATEMENT: ${problemStatement}` : `The problem is currently loading on their screen.`}
+
+Your job is to ACT AS A HUMAN CODING INTERVIEWER. 
+1. The candidate can read the problem on their screen. DO NOT read or recite the problem statement to them!
+2. If the problem just loaded, simply say something brief like "The problem is on the screen. Let me know when you've read it and are ready to start."
+3. If the candidate asks clarifying questions about the problem, answer them reasonably based on standard LeetCode-style problem assumptions.
+4. If the candidate is stuck and asks for a hint, give them a subtle hint to push them in the right direction (e.g. "Have you considered using a hash map to track seen elements?").
+5. If the candidate shares their thought process, validate it.
+6. Keep your responses BRIEF and CONCISE. The candidate is actively coding. Do not output large blocks of text.
+7. NEVER ask behavioral or non-coding questions. Focus entirely on the code and the algorithm.`
+    }
+
     const persona = PERSONAS[role] || PERSONAS["Default"]
     const type = interviewType || "Behavioral"
     let topics = persona.topics[type] || persona.topics["Behavioral"]
@@ -376,6 +397,7 @@ IMPORTANT: Do NOT break character. You are a real human interviewer for today, n
 // ── API Handler ──────────────────────────────────────────────
 export async function POST(req: NextRequest) {
     try {
+        const body = await req.json()
         const {
             role,
             history,
@@ -388,7 +410,10 @@ export async function POST(req: NextRequest) {
             userName = "the candidate",
             focus = "topic",
             customTopics = "",
-        } = await req.json()
+            isCodingMode = false,
+            problemTitle,
+            problemStatement
+        } = body
 
         let resumeData = null
         if (focus === "resume") {
@@ -405,7 +430,8 @@ export async function POST(req: NextRequest) {
         }
 
         const systemInstruction = buildSystemPrompt(
-            role, interviewType, seniority, durationMins, elapsedSeconds, exchangeCount, userName, focus, customTopics, resumeData
+            role, interviewType, seniority, durationMins, elapsedSeconds, exchangeCount, userName, 
+            focus, customTopics, resumeData, isCodingMode, problemTitle, problemStatement
         )
 
         const model = genAI.getGenerativeModel({

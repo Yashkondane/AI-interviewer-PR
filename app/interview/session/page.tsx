@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button"
 import { AiOrb } from "@/components/interview/ai-orb"
 import { Waveform } from "@/components/interview/waveform"
 import { CameraFeed } from "@/components/interview/camera-feed"
+import { CodingWorkspace } from "@/components/interview/coding-workspace"
 import { useInterview } from "@/hooks/use-interview"
 import { useSpeech } from "@/hooks/use-speech"
+import { useCodingStore } from "@/hooks/use-coding-store"
 import { createClient } from "@/lib/supabase/client"
 import {
     PhoneOff, Mic, MicOff, VideoOff, Video,
@@ -144,6 +146,10 @@ function SessionContent() {
         userName: userName || undefined,
         focus: params.get("focus") || "topic",
         custom_topics: params.get("custom_topics") || "",
+        dsa_enabled: params.get("dsa_enabled") === "true",
+        dsa_only: params.get("dsa_only") === "true",
+        cp_level: params.get("cp_level") || "Intermediate",
+        preferred_language: params.get("preferred_language") || "javascript",
     }
 
     const {
@@ -152,7 +158,17 @@ function SessionContent() {
         interimTranscript,
         cameraState, videoRef,
         startInterview, endInterview,
+        fetchCodingQuestion
     } = useInterview(config)
+
+    const { isCodingMode, questionNumber } = useCodingStore()
+
+    // ── Fetch next question when user advances ──
+    useEffect(() => {
+        if (isCodingMode && questionNumber > 1) {
+            fetchCodingQuestion()
+        }
+    }, [questionNumber, isCodingMode, fetchCodingQuestion])
 
     // Get mic volume from a separate speech hook instance (just for volume meter)
     const { micVolume, micBlocked, startVolumeAnalyzer, stopVolumeAnalyzer } = useSpeech()
@@ -227,7 +243,7 @@ function SessionContent() {
             )}
 
             {/* ── Camera denied at start → full-screen block ── */}
-            {!cameraState.isActive && cameraState.error && !cameraEnded && status !== "idle" && (
+            {false && !cameraState.isActive && cameraState.error && !cameraEnded && status !== "idle" && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center"
                     style={{ background: "rgba(5,10,20,0.9)", backdropFilter: "blur(20px)" }}>
                     <div className="flex flex-col items-center gap-6 max-w-sm text-center px-6">
@@ -256,10 +272,9 @@ function SessionContent() {
             )}
 
             {/* ── LEFT PANEL ─────────────────────────────────────────── */}
-            <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6 relative">
-
+            <div className="flex-1 flex flex-col relative" style={{ height: "100vh" }}>
                 {/* Top bar */}
-                <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-8 py-5">
+                <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-8 py-5 z-10">
                     <div className="flex items-center gap-2">
                         <div className="h-6 w-6 rounded-md bg-primary/90 flex items-center justify-center">
                             <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden>
@@ -288,8 +303,14 @@ function SessionContent() {
                     </div>
                 </div>
 
+                {isCodingMode ? (
+                    <div className="absolute inset-0 pt-[72px]">
+                        <CodingWorkspace />
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6 relative pt-[72px]">
                 {/* Exchange counter */}
-                <div className="text-muted-foreground text-xs mt-16">
+                <div className="text-muted-foreground text-xs mt-4">
                     {exchanges.length > 0 ? `Exchange ${exchanges.length}` : "Starting…"}
                 </div>
 
@@ -368,6 +389,8 @@ function SessionContent() {
                     <PhoneOff className="h-4 w-4" />
                     End Interview
                 </Button>
+                </div>
+            )}
             </div>
 
             {/* ── RIGHT PANEL — Camera + Transcript ─────────────────── */}
@@ -379,6 +402,19 @@ function SessionContent() {
                     stream={null}
                     cameraState={cameraState}
                 />
+
+                {/* AI Orb (when in coding mode) */}
+                {isCodingMode && (
+                    <div className="flex justify-center items-center py-4 bg-slate-900/50 rounded-xl border border-white/5">
+                        <div className="scale-75 origin-center">
+                            <AiOrb
+                                isSpeaking={status === "ai-speaking"}
+                                isListening={status === "user-listening"}
+                                isProcessing={status === "processing"}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Transcript */}
                 <div className="flex-1 flex flex-col gap-2 overflow-hidden">

@@ -135,33 +135,12 @@ export function useSpeech(options: SpeechOptions = {}) {
         })
     }, [options])
 
-    // ── Speak: try Google TTS first, fall back to browser ─────
+    // ── Speak: Always use browser TTS to avoid API errors ─────
     const speak = useCallback(async (text: string): Promise<void> => {
         setIsSpeaking(true)
-        try {
-            const res = await fetch("/api/tts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text }),
-            })
-            if (!res.ok) throw new Error("API TTS failed")
-
-            const { audioContent } = await res.json()
-            if (!audioContent) throw new Error("No audio content")
-
-            return new Promise((resolve) => {
-                const audio = new Audio(`data:audio/mp3;base64,${audioContent}`)
-                audioRef.current = audio
-                audio.onended = () => { setIsSpeaking(false); resolve(); options.onEnd?.() }
-                audio.onerror = () => { setIsSpeaking(false); resolve() }
-                audio.play().catch(() => { setIsSpeaking(false); resolve() })
-            })
-        } catch {
-            // Fallback to free browser TTS
-            console.info("Google TTS unavailable, using browser speech synthesis")
-            return speakWithBrowser(text)
-        }
-    }, [options, speakWithBrowser])
+        console.info("Using browser speech synthesis")
+        return speakWithBrowser(text)
+    }, [speakWithBrowser])
 
     const stopSpeaking = useCallback(() => {
         if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0 }
