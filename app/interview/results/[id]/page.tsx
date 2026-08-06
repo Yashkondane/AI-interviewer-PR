@@ -9,11 +9,13 @@ import {
     RefreshCw, 
     LayoutDashboard, 
     ChevronDown, 
-    ChevronUp, 
+    ChevronUp,
+    ChevronLeft,
     CheckCircle2, 
     Target, 
     Sparkles 
 } from "lucide-react"
+import Link from "next/link"
 
 interface AnswerFeedback {
     question: string
@@ -192,7 +194,13 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
         : (session.overall_score || 0)
 
     return (
-        <div className="min-h-screen px-4 py-16" style={{ background: "hsl(216 42% 5%)" }}>
+        <div className="min-h-screen px-4 py-16 relative" style={{ background: "hsl(216 42% 5%)" }}>
+            {/* Back Button */}
+            <Link href="/dashboard" className="absolute top-8 left-8 flex items-center gap-2 text-muted-foreground hover:text-white transition-colors text-sm font-medium">
+                <ChevronLeft className="w-4 h-4" />
+                Back to Dashboard
+            </Link>
+
             <div className="max-w-2xl mx-auto flex flex-col gap-8">
 
                 {/* Header */}

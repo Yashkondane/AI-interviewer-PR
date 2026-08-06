@@ -132,3 +132,63 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================================
+-- Generated coding questions
+-- ============================================================
+create table if not exists public.generated_questions (
+  id            uuid primary key default gen_random_uuid(),
+  session_id    uuid references public.interview_sessions(id) on delete cascade,
+  title         text not null,
+  statement     text not null,
+  difficulty    text,
+  topic         text,
+  starter_code  text,
+  test_cases    jsonb,
+  reference_solution text,
+  created_at    timestamptz default now()
+);
+
+alter table public.generated_questions enable row level security;
+
+create policy "Users can view their own generated questions"
+  on public.generated_questions for select
+  using (
+    session_id in (
+      select id from public.interview_sessions where user_id = auth.uid()
+    )
+  );
+
+create policy "Service can insert generated questions"
+  on public.generated_questions for insert
+  with check (true);
+
+-- ============================================================
+-- Coding submissions
+-- ============================================================
+create table if not exists public.coding_submissions (
+  id            uuid primary key default gen_random_uuid(),
+  session_id    uuid references public.interview_sessions(id) on delete cascade,
+  question_id   uuid references public.generated_questions(id) on delete set null,
+  code          text not null,
+  language      text not null,
+  status        text default 'pending',
+  passed_cases  int default 0,
+  total_cases   int default 0,
+  score         int default 0,
+  created_at    timestamptz default now()
+);
+
+alter table public.coding_submissions enable row level security;
+
+create policy "Users can view their own coding submissions"
+  on public.coding_submissions for select
+  using (
+    session_id in (
+      select id from public.interview_sessions where user_id = auth.uid()
+    )
+  );
+
+create policy "Service can insert coding submissions"
+  on public.coding_submissions for insert
+  with check (true);

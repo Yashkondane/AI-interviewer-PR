@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import axios from "axios"
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 )
 
-const EXECUTE_API_URL = "https://onecompiler.com/api/code/exec"
+// ── OneCompiler API (free execution engine without whitelist) ─────
+const ONECOMPILER_API_URL = "https://onecompiler.com/api/code/exec"
 
-// Map our frontend language names to OneCompiler language names
-const LANGUAGE_MAP: Record<string, string> = {
-    "javascript": "nodejs",
-    "python": "python",
-    "java": "java",
-    "cpp": "cpp"
+// Map our frontend language names to OneCompiler language + filename
+const LANGUAGE_CONFIG: Record<string, { language: string; filename: string }> = {
+    "javascript": { language: "nodejs", filename: "main.js" },
+    "python":     { language: "python", filename: "main.py" },
+    "java":       { language: "java",   filename: "Main.java" },
+    "cpp":        { language: "cpp",    filename: "main.cpp" },
+}
+
+// ── Normalize output for comparison ──────────────────────────
+function normalizeOutput(output: string): string {
+    return output
+        .replace(/\r\n/g, "\n")   // Normalize Windows line endings
+        .replace(/\r/g, "\n")     // Normalize old Mac line endings
+        .trim()                    // Strip leading/trailing whitespace
 }
 
 export async function POST(req: NextRequest) {
@@ -26,77 +34,115 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Code and language are required" }, { status: 400 })
         }
 
-        const langConfig = LANGUAGE_MAP[language]
+        const langConfig = LANGUAGE_CONFIG[language]
         if (!langConfig) {
-            return NextResponse.json({ error: "Unsupported language" }, { status: 400 })
+            return NextResponse.json({ error: `Unsupported language: ${language}` }, { status: 400 })
         }
 
         const testCases = clientTestCases
 
-        // If no test cases are available (e.g. freestyle coding), just execute it once without stdin
+        // ── Free-run mode (no test cases) ────────────────────
+        // Use the first test case input if available, otherwise run with empty stdin
         if (testCases.length === 0) {
             const result = await executeCode(code, langConfig, "")
-            const output = result.stdout || result.stderr || result.exception || "Execution completed with no output";
+            
+            if (result.exception) {
+                return NextResponse.json({
+                    output: `Error:\n${result.exception}`,
+                    results: []
+                })
+            }
+
+            const output = result.stdout || result.stderr || "Execution completed with no output."
             return NextResponse.json({
-                output: output,
+                output: output.trim(),
                 results: []
             })
         }
 
-        // Execute against test cases
-        const results = []
+        // ── Execute against test cases ───────────────────────
         let passedCount = 0
+        const evaluatedResults = []
 
-        // OneCompiler API has strict rate limits, so we must execute sequentially
-        const executeWithLimit = async (cases: any[]) => {
-            const resultsList = []
-            for (const tc of cases) {
-                try {
-                    const res = await executeCode(code, langConfig, tc.input)
-                    if (res.exception) {
-                        resultsList.push({ passed: false, actualOutput: "", error: res.exception, input: tc.input, expectedOutput: tc.expectedOutput })
-                        continue
-                    }
-                    const output = res.stdout ? res.stdout.trim() : ""
-                    const stderr = res.stderr ? res.stderr.trim() : ""
-                    
-                    const passed = output === String(tc.expectedOutput).trim()
-                    if (passed) passedCount++
-                    
-                    resultsList.push({
-                        passed,
-                        actualOutput: output || stderr,
-                        error: stderr ? "Runtime/Compilation Error" : undefined,
+        for (const tc of testCases) {
+            try {
+                const result = await executeCode(code, langConfig, tc.input)
+
+                // Check for compilation/runtime errors
+                if (result.exception) {
+                    evaluatedResults.push({
+                        passed: false,
+                        actualOutput: "",
+                        error: `Error:\n${result.exception.trim()}`,
                         input: tc.input,
                         expectedOutput: tc.expectedOutput
                     })
-                } catch (e: any) {
-                    resultsList.push({ passed: false, actualOutput: "", error: e.message, input: tc.input, expectedOutput: tc.expectedOutput })
+                    continue
                 }
-                // Small delay to prevent rate limiting
-                await new Promise(r => setTimeout(r, 200))
+
+                const stdout = result.stdout || ""
+                const stderr = result.stderr || ""
+
+                // Runtime error (stderr present, or exception)
+                if (stderr) {
+                    evaluatedResults.push({
+                        passed: false,
+                        actualOutput: stdout.trim(),
+                        error: `Runtime/Compilation Error:\n${stderr.trim()}`,
+                        input: tc.input,
+                        expectedOutput: tc.expectedOutput
+                    })
+                    continue
+                }
+
+                // Normalize and compare outputs
+                const normalizedActual = normalizeOutput(stdout)
+                const normalizedExpected = normalizeOutput(String(tc.expectedOutput))
+                const passed = normalizedActual === normalizedExpected
+
+                if (passed) passedCount++
+
+                evaluatedResults.push({
+                    passed,
+                    actualOutput: normalizedActual || "(empty output)",
+                    error: undefined,
+                    input: tc.input,
+                    expectedOutput: tc.expectedOutput
+                })
+            } catch (e: any) {
+                evaluatedResults.push({
+                    passed: false,
+                    actualOutput: "",
+                    error: `Execution failed: ${e.message}`,
+                    input: tc.input,
+                    expectedOutput: tc.expectedOutput
+                })
             }
-            return resultsList
+            
+            // Add a 300ms delay between API calls to prevent OneCompiler rate limiting
+            await new Promise(r => setTimeout(r, 300))
         }
 
-        const evaluatedResults = await executeWithLimit(testCases)
-
-        // If action is submit, save submission to DB
+        // ── Save submission to DB on "submit" action ─────────
         if (action === "submit" && questionId && sessionId) {
-            await supabase.from("coding_submissions").insert({
-                session_id: sessionId,
-                question_id: questionId,
-                code,
-                language,
-                status: passedCount === testCases.length ? "success" : "failed",
-                passed_cases: passedCount,
-                total_cases: testCases.length,
-                score: Math.round((passedCount / testCases.length) * 100)
-            })
+            try {
+                await supabase.from("coding_submissions").insert({
+                    session_id: sessionId,
+                    question_id: questionId,
+                    code,
+                    language,
+                    status: passedCount === testCases.length ? "success" : "failed",
+                    passed_cases: passedCount,
+                    total_cases: testCases.length,
+                    score: Math.round((passedCount / testCases.length) * 100)
+                })
+            } catch (dbErr) {
+                console.error("Failed to save submission:", dbErr)
+            }
         }
 
         return NextResponse.json({
-            output: `Completed ${testCases.length} test cases. ${passedCount} passed.`,
+            output: `Completed ${testCases.length} test case${testCases.length > 1 ? "s" : ""}. ${passedCount}/${testCases.length} passed.`,
             results: evaluatedResults,
             passed: passedCount,
             total: testCases.length
@@ -108,24 +154,28 @@ export async function POST(req: NextRequest) {
     }
 }
 
-async function executeCode(code: string, langConfig: string, stdin: string) {
-    const EXT_MAP: Record<string, string> = {
-        "nodejs": "js",
-        "python": "py",
-        "java": "java",
-        "cpp": "cpp"
+// ── Execute code via OneCompiler API ─────────────────────────
+async function executeCode(
+    code: string, 
+    config: { language: string; filename: string }, 
+    stdin: string
+) {
+    const res = await fetch(ONECOMPILER_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            properties: {
+                language: config.language,
+                files: [{ name: config.filename, content: code }],
+                stdin: stdin
+            }
+        }),
+    })
+
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`OneCompiler API error (${res.status}): ${text}`)
     }
-    const FILE_NAME_MAP: Record<string, string> = {
-        "java": "Main"  // Java requires class name to match file name
-    }
-    const ext = EXT_MAP[langConfig] || langConfig
-    const baseName = FILE_NAME_MAP[langConfig] || "main"
-    const res = await axios.post(EXECUTE_API_URL, {
-        properties: {
-            language: langConfig,
-            files: [{ name: `${baseName}.${ext}`, content: code }],
-            stdin: stdin
-        }
-    }, { timeout: 10000 })
-    return res.data
+
+    return res.json()
 }

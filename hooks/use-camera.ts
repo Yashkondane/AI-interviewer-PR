@@ -2,6 +2,17 @@
 
 import { useRef, useState, useCallback, useEffect } from "react"
 
+// Suppress MediaPipe's harmless INFO logs that trigger Next.js 15 error overlays
+if (typeof console !== 'undefined') {
+    const originalConsoleError = console.error;
+    console.error = (...args) => {
+        if (typeof args[0] === 'string' && args[0].includes('TensorFlow Lite XNNPACK delegate')) {
+            return;
+        }
+        originalConsoleError(...args);
+    };
+}
+
 export interface FrameScore {
     eyeContact: number   // 0–100
     posture: number      // 0–100
@@ -49,7 +60,7 @@ export function useCamera() {
                 FaceLandmarker.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-                        delegate: "GPU",
+                        delegate: "CPU",
                     },
                     runningMode: "VIDEO",
                     numFaces: 1,
@@ -58,7 +69,7 @@ export function useCamera() {
                 PoseLandmarker.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-                        delegate: "GPU",
+                        delegate: "CPU",
                     },
                     runningMode: "VIDEO",
                     numPoses: 1,
@@ -104,61 +115,64 @@ export function useCamera() {
         let posture = 50
         let expression: FrameScore["expression"] = "neutral"
 
+        // ── Face Analysis ──────────────────────────────────────────
         try {
-            // ── Face Analysis ──────────────────────────────────────────
-            const faceResult = face.detectForVideo(video, now)
-            if (faceResult?.faceLandmarks?.[0]) {
-                const landmarks = faceResult.faceLandmarks[0]
+            if (face && typeof face.detectForVideo === "function") {
+                const faceResult = face.detectForVideo(video, now)
+                if (faceResult?.faceLandmarks?.[0]) {
+                    const landmarks = faceResult.faceLandmarks[0]
 
-                // Eye contact: use nose tip (landmark 1) as head direction proxy
-                // Landmark 1 is nose tip. If it's centered (x≈0.5, y≈0.4), user is looking at cam
-                const noseTip = landmarks[1]
-                if (noseTip) {
-                    const dx = Math.abs(noseTip.x - 0.5)  // 0 = center
-                    const dy = Math.abs(noseTip.y - 0.38) // 0.38 = approx natural cam position
-                    const deviation = Math.sqrt(dx * dx + dy * dy)
-                    eyeContact = Math.round(Math.max(0, Math.min(100, 100 - deviation * 280)))
-                }
+                    // Eye contact: use nose tip (landmark 1) as head direction proxy
+                    const noseTip = landmarks[1]
+                    if (noseTip) {
+                        const dx = Math.abs(noseTip.x - 0.5)  // 0 = center
+                        const dy = Math.abs(noseTip.y - 0.38) // 0.38 = approx natural cam position
+                        const deviation = Math.sqrt(dx * dx + dy * dy)
+                        eyeContact = Math.round(Math.max(0, Math.min(100, 100 - deviation * 280)))
+                    }
 
-                // Expression: use lip corner distance + brow raise
-                // Lip corners: 61 (left), 291 (right). Brow: 107, 336
-                const lipLeft = landmarks[61]
-                const lipRight = landmarks[291]
-                const browLeft = landmarks[107]
-                if (lipLeft && lipRight && browLeft) {
-                    const lipWidth = Math.abs(lipRight.x - lipLeft.x)
-                    const browY = browLeft.y
+                    // Expression: use lip corner distance + brow raise
+                    const lipLeft = landmarks[61]
+                    const lipRight = landmarks[291]
+                    const browLeft = landmarks[107]
+                    if (lipLeft && lipRight && browLeft) {
+                        const lipWidth = Math.abs(lipRight.x - lipLeft.x)
+                        const browY = browLeft.y
 
-                    // Smile (wider lips) → confident, furrowed brow → nervous
-                    if (lipWidth > 0.18 && browY < 0.35) expression = "confident"
-                    else if (browY > 0.42) expression = "nervous"
-                    else expression = "neutral"
-                }
-            }
-
-            // ── Pose Analysis ─────────────────────────────────────────
-            const poseResult = pose.detectForVideo(video, now)
-            if (poseResult?.landmarks?.[0]) {
-                const lm = poseResult.landmarks[0]
-                // Shoulders: 11 (left), 12 (right). Hips: 23 (left), 24 (right)
-                const lShoulder = lm[11]
-                const rShoulder = lm[12]
-                const lHip = lm[23]
-
-                if (lShoulder && rShoulder && lHip) {
-                    // Posture: shoulders should be level + above hips
-                    const shoulderDiff = Math.abs(lShoulder.y - rShoulder.y)  // level = 0
-                    const shoulderAboveHip = lHip.y - lShoulder.y               // positive = upright
-
-                    const levelScore = Math.max(0, 100 - shoulderDiff * 800)
-                    const uprightScore = shoulderAboveHip > 0.15
-                        ? Math.min(100, 40 + shoulderAboveHip * 200) : 30
-
-                    posture = Math.round((levelScore + uprightScore) / 2)
+                        if (lipWidth > 0.18 && browY < 0.35) expression = "confident"
+                        else if (browY > 0.42) expression = "nervous"
+                        else expression = "neutral"
+                    }
                 }
             }
         } catch (_) {
-            // Ignore per-frame errors
+            // Ignore per-frame face detection error
+        }
+
+        // ── Pose Analysis ─────────────────────────────────────────
+        try {
+            if (pose && typeof pose.detectForVideo === "function") {
+                const poseResult = pose.detectForVideo(video, now)
+                if (poseResult?.landmarks?.[0]) {
+                    const lm = poseResult.landmarks[0]
+                    const lShoulder = lm[11]
+                    const rShoulder = lm[12]
+                    const lHip = lm[23]
+
+                    if (lShoulder && rShoulder && lHip) {
+                        const shoulderDiff = Math.abs(lShoulder.y - rShoulder.y)  // level = 0
+                        const shoulderAboveHip = lHip.y - lShoulder.y               // positive = upright
+
+                        const levelScore = Math.max(0, 100 - shoulderDiff * 800)
+                        const uprightScore = shoulderAboveHip > 0.15
+                            ? Math.min(100, 40 + shoulderAboveHip * 200) : 30
+
+                        posture = Math.round((levelScore + uprightScore) / 2)
+                    }
+                }
+            }
+        } catch (_) {
+            // Ignore per-frame pose detection error
         }
 
         return { eyeContact, posture, expression }
