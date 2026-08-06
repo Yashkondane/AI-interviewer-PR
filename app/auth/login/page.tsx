@@ -70,7 +70,7 @@ function LoginForm() {
                             <rect x="9" y="3" width="2" height="8" rx="1" fill="white" opacity="0.7" />
                         </svg>
                     </div>
-                    <span className="font-bold text-foreground tracking-tight">Storm<span className="text-primary">Prep</span></span>
+                    <span className="font-bold text-foreground tracking-tight">Prep<span className="text-primary">Wise</span></span>
                 </Link>
 
                 <div>

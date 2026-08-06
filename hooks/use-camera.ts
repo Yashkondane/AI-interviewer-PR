@@ -24,6 +24,7 @@ export function useCamera() {
     const rafRef = useRef<number>(0)
     const faceLandmarkerRef = useRef<any>(null)
     const poseLandmarkerRef = useRef<any>(null)
+    const lastTimestampRef = useRef<number>(0)
 
     const [state, setState] = useState<CameraState>({
         isReady: false,
@@ -77,9 +78,27 @@ export function useCamera() {
     const analyzeFrame = useCallback((video: HTMLVideoElement): FrameScore => {
         const face = faceLandmarkerRef.current
         const pose = poseLandmarkerRef.current
-        if (!face || !pose || video.readyState < 2) return DEFAULT_SCORE
+        if (!face || typeof face.detectForVideo !== 'function' || !pose || typeof pose.detectForVideo !== 'function' || !video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return DEFAULT_SCORE
 
-        const now = performance.now()
+        // Only process if the video has a new frame
+        const videoTime = video.currentTime
+        if (videoTime === 0 || videoTime === lastTimestampRef.current) return DEFAULT_SCORE
+        lastTimestampRef.current = videoTime
+
+        // MediaPipe strictly requires monotonically increasing INTEGER timestamps
+        if (!video.dataset.lastMediaPipeTime) {
+            video.dataset.lastMediaPipeTime = "0"
+        }
+        let now = parseInt(video.dataset.lastMediaPipeTime) + 16
+        const actualNow = Math.round(performance.now())
+        if (now < actualNow) now = actualNow
+        video.dataset.lastMediaPipeTime = now.toString()
+
+        // Ensure video element has DOM width/height set, otherwise MediaPipe WASM crashes!
+        if (video.width === 0 || video.width !== video.videoWidth) {
+            video.width = video.videoWidth
+            video.height = video.videoHeight
+        }
 
         let eyeContact = 50
         let posture = 50
@@ -220,8 +239,22 @@ export function useCamera() {
 
     const stopCamera = useCallback(() => {
         cancelAnimationFrame(rafRef.current)
-        streamRef.current?.getTracks().forEach(t => t.stop())
-        streamRef.current = null
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop())
+            streamRef.current = null
+        }
+        
+        // CRITICAL: WebAssembly models must be explicitly closed to free memory.
+        // Otherwise, navigating away and back will cause an OOM abort() crash!
+        if (faceLandmarkerRef.current) {
+            faceLandmarkerRef.current.close()
+            faceLandmarkerRef.current = undefined
+        }
+        if (poseLandmarkerRef.current) {
+            poseLandmarkerRef.current.close()
+            poseLandmarkerRef.current = undefined
+        }
+        
         setState(s => ({ ...s, isActive: false, isReady: false }))
     }, [])
 

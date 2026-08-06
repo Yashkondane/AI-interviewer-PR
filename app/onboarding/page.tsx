@@ -131,7 +131,7 @@ export default function OnboardingPage() {
                     </svg>
                 </div>
                 <span className="font-bold text-foreground text-lg tracking-tight">
-                    Storm<span className="text-primary">Prep</span>
+                    Prep<span className="text-primary">Wise</span>
                 </span>
             </div>
 

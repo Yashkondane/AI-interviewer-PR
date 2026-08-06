@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { AiOrb } from "@/components/interview/ai-orb"
 import { Waveform } from "@/components/interview/waveform"
@@ -24,7 +25,7 @@ function formatTime(seconds: number) {
 
 const STATUS_LABELS: Record<string, { text: string; color: string }> = {
     idle: { text: "Preparing…", color: "rgba(148,163,184,0.8)" },
-    "ai-speaking": { text: "AI Interviewer is speaking…", color: "rgba(59,130,246,0.9)" },
+    "ai-speaking": { text: "Prep is speaking…", color: "rgba(59,130,246,0.9)" },
     "user-listening": { text: "Your turn — speak now", color: "rgba(52,211,153,0.9)" },
     processing: { text: "Processing…", color: "rgba(251,191,36,0.9)" },
     done: { text: "Interview complete", color: "rgba(52,211,153,0.9)" },
@@ -116,6 +117,7 @@ function SessionContent() {
     const supabase = createClient()
     const started = useRef(false)
     const [cameraEnded, setCameraEnded] = useState(false)
+    const [chatInput, setChatInput] = useState("")
     const cameraWasActive = useRef(false)
     const [userName, setUserName] = useState("")
 
@@ -158,7 +160,7 @@ function SessionContent() {
         interimTranscript,
         cameraState, videoRef,
         startInterview, endInterview,
-        fetchCodingQuestion
+        fetchCodingQuestion, doTurn, stopListening
     } = useInterview(config)
 
     const { isCodingMode, questionNumber } = useCodingStore()
@@ -276,14 +278,10 @@ function SessionContent() {
                 {/* Top bar */}
                 <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-8 py-5 z-10">
                     <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-md bg-primary/90 flex items-center justify-center">
-                            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden>
-                                <rect x="6" y="1" width="2" height="12" rx="1" fill="white" />
-                                <rect x="3" y="3" width="2" height="8" rx="1" fill="white" opacity="0.7" />
-                                <rect x="9" y="3" width="2" height="8" rx="1" fill="white" opacity="0.7" />
-                            </svg>
+                        <div className="relative h-6 w-6 group-hover:scale-105 transition-transform duration-300">
+                            <Image src="/logo.png" alt="PrepWise Logo" fill className="object-contain" priority />
                         </div>
-                        <span className="text-foreground text-sm font-semibold">Storm<span className="text-primary">Prep</span></span>
+                        <span className="text-foreground text-sm font-semibold">Prep<span className="text-primary">Wise</span></span>
                     </div>
 
                     {/* Status strip + timer */}
@@ -300,6 +298,15 @@ function SessionContent() {
                             <span className="text-xs" style={{ color: label.color }}>●</span>
                             <span className="text-foreground/70 text-xs">{label.text}</span>
                         </div>
+                        <Button
+                            onClick={handleEnd}
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10 gap-2 rounded-xl border border-white/8 h-8 ml-2"
+                        >
+                            <PhoneOff className="h-3 w-3" />
+                            End
+                        </Button>
                     </div>
                 </div>
 
@@ -379,16 +386,6 @@ function SessionContent() {
                         </div>
                     )}
                 </div>
-
-                {/* End button */}
-                <Button
-                    onClick={handleEnd}
-                    variant="ghost"
-                    className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10 gap-2 rounded-xl border border-white/8"
-                >
-                    <PhoneOff className="h-4 w-4" />
-                    End Interview
-                </Button>
                 </div>
             )}
             </div>
@@ -431,7 +428,7 @@ function SessionContent() {
                                 <div key={i} className="flex flex-col gap-1.5">
                                     <div className="rounded-xl p-3"
                                         style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.12)" }}>
-                                        <p className="text-primary text-[11px] font-semibold mb-1">Interviewer</p>
+                                        <p className="text-primary text-[11px] font-semibold mb-1">Prep</p>
                                         <p className="text-foreground/80 text-xs leading-relaxed">{ex.question}</p>
                                     </div>
                                     {ex.answer ? (
@@ -441,12 +438,30 @@ function SessionContent() {
                                             <p className="text-foreground/75 text-xs leading-relaxed">{ex.answer}</p>
                                         </div>
                                     ) : status === "user-listening" && i === exchanges.length - 1 ? (
-                                        <div className="rounded-xl p-3 ml-3"
-                                            style={{ background: "rgba(52,211,153,0.04)", border: "1px dashed rgba(52,211,153,0.2)" }}>
-                                            <p className="text-emerald-400 text-[11px] font-semibold mb-1">You — speaking</p>
-                                            <p className="text-foreground/40 text-xs italic">
-                                                {interimTranscript || "Listening…"}
-                                            </p>
+                                        <div className="flex flex-col gap-2">
+                                            <div className="rounded-xl p-3 ml-3"
+                                                style={{ background: "rgba(52,211,153,0.04)", border: "1px dashed rgba(52,211,153,0.2)" }}>
+                                                <p className="text-emerald-400 text-[11px] font-semibold mb-1">You — speaking</p>
+                                                <p className="text-foreground/40 text-xs italic">
+                                                    {interimTranscript || "Listening…"}
+                                                </p>
+                                            </div>
+                                            <form onSubmit={(e) => {
+                                                e.preventDefault()
+                                                if (chatInput.trim()) {
+                                                    stopListening()
+                                                    doTurn(chatInput.trim())
+                                                    setChatInput("")
+                                                }
+                                            }} className="ml-3 mt-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={chatInput}
+                                                    onChange={e => setChatInput(e.target.value)}
+                                                    placeholder="Type approach if mic fails..." 
+                                                    className="w-full bg-slate-900 border border-emerald-500/30 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500" 
+                                                />
+                                            </form>
                                         </div>
                                     ) : null}
                                 </div>

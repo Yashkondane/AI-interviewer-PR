@@ -12,9 +12,7 @@ const nextConfig = {
   // Allow three/webgpu and three/tsl ESM subpath exports to be bundled
   transpilePackages: ["three"],
   serverExternalPackages: ["pdf-parse"],
-  experimental: {
-    esmExternals: "loose",
-  },
+
 }
 
 export default nextConfig

@@ -77,7 +77,7 @@ export default function Hero() {
             </h1>
 
             <p className="text-muted-foreground leading-relaxed text-pretty max-w-[480px] text-base md:text-lg">
-              Prepwise conducts real, voice-based mock interviews tailored to your role. Get instant feedback on clarity, pacing, and confidence — so you walk in prepared.
+              PrepWise conducts real, voice-based mock interviews tailored to your role. Get instant feedback on clarity, pacing, and confidence — so you walk in prepared.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-4 mt-2 w-full sm:w-auto">

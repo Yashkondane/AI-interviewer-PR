@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Mic, Sparkles } from "lucide-react"
+import Link from "next/link"
 
 export default function CTA() {
   return (
-    <section className="py-28 px-6">
+    <section id="cta" className="py-28 px-6">
       <div className="max-w-4xl mx-auto">
         <div
           className="text-center rounded-3xl p-14 relative overflow-hidden"
@@ -80,13 +81,15 @@ export default function CTA() {
 
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button
-              size="lg"
-              className="btn-primary-glow bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-9 gap-2 text-base rounded-xl shadow-lg shadow-primary/25"
-            >
-              Start Interviewing Free
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+            <Link href="/auth/signup">
+              <Button
+                size="lg"
+                className="btn-primary-glow bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-9 gap-2 text-base rounded-xl shadow-lg shadow-primary/25"
+              >
+                Start Interviewing For Free
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
             <Button
               size="lg"
               variant="ghost"

@@ -23,93 +23,43 @@ export async function POST(req: NextRequest) {
             "python": {
                 ext: "py",
                 starterExample: `import sys\ninput_data = sys.stdin.read().split()\n# Parse input and implement your solution\n# Print the result to stdout`,
-                solutionExample: `import sys\ndata = sys.stdin.read().split()\nn = int(data[0])\nnums = list(map(int, data[1:n+1]))\nprint(sum(nums))`
+                solutionExample: `import sys\ndata = sys.stdin.read().split()\nn = int(data[0])\nnums = list(map(int, data[1:n+1]))\ntarget = int(data[-1])\nseen = set()\nfound = False\nfor x in nums:\n    if target - x in seen:\n        found = True\n        break\n    seen.add(x)\nprint("True" if found else "False")`
             },
             "javascript": {
                 ext: "js",
                 starterExample: `const input = require('fs').readFileSync('/dev/stdin', 'utf8').trim().split('\\n');\n// Parse input and implement your solution\n// Use console.log() to print the result`,
-                solutionExample: `const input = require('fs').readFileSync('/dev/stdin', 'utf8').trim().split('\\n');\nconst nums = input[1].split(' ').map(Number);\nconsole.log(nums.reduce((a,b) => a+b, 0));`
+                solutionExample: `const input = require('fs').readFileSync('/dev/stdin', 'utf8').trim().split('\\n');\nconst nums = input[1].split(' ').map(Number);\nconst target = parseInt(input[2]);\nconst seen = new Set();\nlet found = false;\nfor (const x of nums) {\n    if (seen.has(target - x)) { found = true; break; }\n    seen.add(x);\n}\nconsole.log(found ? "True" : "False");`
             },
             "java": {
                 ext: "java",
                 starterExample: `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Parse input and implement your solution\n        // Use System.out.println() to print the result\n    }\n}`,
-                solutionExample: `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        int sum = 0;\n        for (int i = 0; i < n; i++) sum += sc.nextInt();\n        System.out.println(sum);\n    }\n}`
+                solutionExample: `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        int[] nums = new int[n];\n        for (int i = 0; i < n; i++) nums[i] = sc.nextInt();\n        int target = sc.nextInt();\n        Set<Integer> seen = new HashSet<>();\n        boolean found = false;\n        for (int x : nums) {\n            if (seen.contains(target - x)) { found = true; break; }\n            seen.add(x);\n        }\n        System.out.println(found ? "True" : "False");\n    }\n}`
             },
             "cpp": {
                 ext: "cpp",
                 starterExample: `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Read input from stdin\n    // Implement your solution\n    // Print the result to stdout\n    return 0;\n}`,
-                solutionExample: `#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n    int n; cin >> n;\n    vector<int> v(n);\n    for (auto& x : v) cin >> x;\n    cout << accumulate(v.begin(), v.end(), 0) << endl;\n    return 0;\n}`
+                solutionExample: `#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n    int n; cin >> n;\n    vector<int> v(n);\n    for (auto& x : v) cin >> x;\n    int target; cin >> target;\n    unordered_set<int> seen;\n    bool found = false;\n    for (int x : v) {\n        if (seen.count(target - x)) { found = true; break; }\n        seen.insert(x);\n    }\n    cout << (found ? "True" : "False") << endl;\n    return 0;\n}`
             }
         }
 
         const langInfo = langExamples[language] || langExamples["python"]
 
-        const prompt = `
-You are an expert technical interviewer at ${company || 'a top tech company'}.
-Generate a data structures and algorithms (DSA) coding problem for a ${cp_level} level candidate applying for a ${role} role.
-The problem should be similar in style to LeetCode / Codeforces questions.
-
-IMPORTANT: The code must be written in **competitive programming style** — it should read from STDIN and write to STDOUT.
-It must be a COMPLETE, RUNNABLE program (with a main function if needed). NOT a class-based LeetCode solution.
-
-Here is an example of the starter code style for ${language}:
-${langInfo.starterExample}
-
-Here is an example of a reference solution style for ${language}:
-${langInfo.solutionExample}
-
-You MUST return the output as a strictly formatted JSON object matching this schema exactly:
-{
-    "title": "Problem Title",
-    "difficulty": "Easy/Medium/Hard",
-    "topic": "Array/String/Graph/etc",
-    "statement": "HTML formatted problem statement with <p>, <strong>, <pre> for examples. Include Input Format, Output Format, and Constraints sections.",
-    "starter_code": "A complete runnable program skeleton in ${language} that reads from stdin and prints to stdout. Include the boilerplate (imports, main function, input parsing) but leave the core algorithm as a comment for the candidate to fill in.",
-    "reference_solution": "A complete, working, optimal solution in ${language} that reads from stdin and prints to stdout",
-    "test_cases": [
-        { "input": "The exact stdin string (e.g. '3\\n1 2 3')", "expectedOutput": "The exact stdout string (e.g. '6')" }
-    ]
-}
-
-CRITICAL RULES:
-- Generate EXACTLY 10 test cases in the "test_cases" array. Include edge cases and standard inputs.
-- The "input" field is the EXACT string that will be piped to stdin. Use newlines (\\n) to separate lines.
-- The "expectedOutput" field is the EXACT string the program should print to stdout (trimmed).
-- The starter_code MUST be a complete runnable program. For C++ include main(), for Java include public class Main with main(), etc.
-- The starter_code should have comments showing where to implement the solution, but NO actual algorithm logic.
-- VERY IMPORTANT: Each test case is run as a SEPARATE program execution with its own stdin. The code must read the input ONCE, solve it, print the answer, and EXIT. Do NOT use "while(cin >> ...)", "while(t--)", or any loop that reads multiple test cases. There is exactly ONE test case per execution.
-- ALL test case input and expectedOutput values MUST be plain literal strings. Do NOT use code expressions, string concatenation, or function calls (e.g. " ".join(...), range(...), Array.from(...)). Write out the full literal value.
-- Keep all test case inputs SHORT — maximum 200 characters each. For "large" test cases, use n=50 to n=100, not n=1000.
-- Output ONLY the raw JSON. Do not include markdown formatting like \`\`\`json.
-`
-
-        const result = await model.generateContent(prompt)
-        const responseText = result.response.text().trim()
-        
-        // Robustly extract just the JSON object from the response
-        const match = responseText.match(/\{[\s\S]*\}/)
-        let jsonStr = match ? match[0] : responseText.trim()
-        
-        // Sanitize: remove any string concatenation expressions that Gemini sometimes puts in
-        // e.g. "1000\n" + " ".join(...) + "\n1" → just keep the first literal part
-        jsonStr = jsonStr.replace(/"[^"]*"\s*\+\s*[^,}\]]+/g, (match) => {
-            // Try to extract just the first quoted string
-            const firstQuote = match.match(/^"([^"]*)"/)
-            return firstQuote ? firstQuote[0] : '""'
-        })
-        
-        let parsedData
-        try {
-            parsedData = JSON.parse(jsonStr)
-        } catch (parseError) {
-            console.error("Failed to parse Gemini output:", jsonStr.substring(0, 500))
-            return NextResponse.json({ error: "Failed to generate a valid question format from AI" }, { status: 500 })
+        // Return a hardcoded problem instantly for testing
+        const hardcodedProblem = {
+            "title": "Two Sum (Existence)",
+            "difficulty": "Easy",
+            "topic": "Array",
+            "statement": "<p>Given an array of integers <code>nums</code> and an integer <code>target</code>, determine if there exist two numbers in the array that add up to <code>target</code>.</p><p><strong>Input Format:</strong><br>The first line contains an integer <code>n</code>.<br>The second line contains <code>n</code> space-separated integers.<br>The third line contains the <code>target</code>.</p><p><strong>Output Format:</strong><br>Print \"True\" if such a pair exists, otherwise print \"False\".</p>",
+            "starter_code": langInfo.starterExample,
+            "reference_solution": langInfo.solutionExample,
+            "test_cases": [
+                { "input": "4\n2 7 11 15\n9", "expectedOutput": "True" },
+                { "input": "3\n3 2 4\n6", "expectedOutput": "True" },
+                { "input": "2\n3 3\n7", "expectedOutput": "False" }
+            ]
         }
 
-        // Validate that we got test cases
-        if (!parsedData.test_cases || parsedData.test_cases.length === 0) {
-            return NextResponse.json({ error: "AI did not generate test cases" }, { status: 500 })
-        }
+        const parsedData = hardcodedProblem
 
         // Save to Supabase (if sessionId is provided)
         let savedQuestion = null

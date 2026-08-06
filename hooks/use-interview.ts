@@ -218,12 +218,9 @@ export function useInterview(config: InterviewConfig) {
     const doTurn = async (userAnswer: string | null): Promise<void> => {
         if (isEndingRef.current) return
 
-        // If coding mode is active, do NOT continue the conversation loop at all.
-        // The user codes in silence. They can unmute to ask questions manually.
-        if (useCodingStore.getState().isCodingMode) {
-            setStatus("user-listening")
-            return
-        }
+        // In coding mode, we still allow the conversation loop to proceed so the 
+        // user can discuss their approach with the AI.
+        // We just don't end the interview strictly by exchange count.
 
         // Only end by exchange count if we're also past 80% of the scheduled time
         const totalSecs = config.duration_mins * 60
@@ -299,8 +296,7 @@ export function useInterview(config: InterviewConfig) {
                 
                 fetchCodingQuestion()
                 
-                // Tell AI to say transitioning text instead of normal response
-                aiText = "Great. Let's now move on to the coding portion of the interview. I'm generating your problem now."
+                aiText = "Great. Let's now move on to the coding portion of the interview. I'm generating your problem now. Please read through the problem statement, and explain your approach to me before you start writing any code."
             }
         }
 
@@ -321,16 +317,23 @@ export function useInterview(config: InterviewConfig) {
             return
         }
 
-        // If coding mode is active, stop the conversation loop.
-        // The user codes in silence and can unmute to ask questions manually.
-        if (useCodingStore.getState().isCodingMode) {
-            setStatus("user-listening")
-            return
-        }
-
         setStatus("user-listening")
-        speechRef.current.resetTranscript()
-        const answer = await speechRef.current.startListening()
+        
+        let answer = ""
+        while (!isEndingRef.current) {
+            speechRef.current.resetTranscript()
+            answer = await speechRef.current.startListening()
+            
+            if (isEndingRef.current) return
+            
+            // If they spoke, break and respond
+            if (answer.trim()) break
+            
+            // In normal mode, if they are silent, send the empty transcript to prompt them
+            if (!useCodingStore.getState().isCodingMode) break
+            
+            // In coding mode, if they are silent, just quietly listen again without bothering the AI
+        }
 
         if (isEndingRef.current) return
 
@@ -432,5 +435,11 @@ export function useInterview(config: InterviewConfig) {
         startInterview,
         endInterview: doEndInterview,
         fetchCodingQuestion,
+        doTurn: (text: string) => {
+            if (doTurnRef.current) {
+                doTurnRef.current(text)
+            }
+        },
+        stopListening: speechHook.stopListening,
     }
 }

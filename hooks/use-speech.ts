@@ -33,45 +33,60 @@ export function useSpeech(options: SpeechOptions = {}) {
     const rafRef = useRef<number>(0)
     const shouldRestartRef = useRef(true)
 
-    // ── Volume analyzer via Web Audio API ───────────────────────
-    const startVolumeAnalyzer = useCallback(async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-            micStreamRef.current = stream
+    // ── Volume Analyzer (Dual Mode for Windows Fix) ──
+    const startVolumeAnalyzer = useCallback(async (mode: 'real' | 'faux' = 'faux') => {
+        setMicBlocked(false)
 
-            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-            if (ctx.state === "suspended") await ctx.resume()
-            
-            const source = ctx.createMediaStreamSource(stream)
-            const analyzer = ctx.createAnalyser()
-            analyzer.fftSize = 256
-            source.connect(analyzer)
-            analyzerRef.current = analyzer
+        if (mode === 'real') {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                micStreamRef.current = stream
+                const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+                if (ctx.state === "suspended") await ctx.resume()
+                
+                const source = ctx.createMediaStreamSource(stream)
+                const analyzer = ctx.createAnalyser()
+                analyzer.fftSize = 256
+                source.connect(analyzer)
+                analyzerRef.current = analyzer
 
-            const data = new Uint8Array(analyzer.frequencyBinCount)
+                const data = new Uint8Array(analyzer.frequencyBinCount)
+                const tick = () => {
+                    analyzer.getByteFrequencyData(data)
+                    const avg = data.reduce((a, b) => a + b, 0) / data.length
+                    const vol = Math.round(Math.min(100, Math.max(0, avg - 2) * 3.5))
+                    setMicVolume(vol)
+                    rafRef.current = requestAnimationFrame(tick)
+                }
+                rafRef.current = requestAnimationFrame(tick)
+            } catch (err: any) {
+                if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") setMicBlocked(true)
+                setMicVolume(0)
+            }
+        } else {
+            // 'faux' mode: prevents getUserMedia from locking the mic during SpeechRecognition
+            let phase = 0
             const tick = () => {
-                analyzer.getByteFrequencyData(data)
-                // Root Mean Square (RMS) would be better, but average is fine for a simple meter
-                const avg = data.reduce((a, b) => a + b, 0) / data.length
-                // Increase sensitivity (3.5x multiplier) and add a small floor
-                const vol = Math.round(Math.min(100, Math.max(0, avg - 2) * 3.5))
-                setMicVolume(vol)
+                if (isListening) {
+                    phase += 0.1
+                    setMicVolume(20 + Math.sin(phase) * 10)
+                } else if (isSpeaking) {
+                    setMicVolume(40 + Math.random() * 40)
+                } else {
+                    setMicVolume(0)
+                }
                 rafRef.current = requestAnimationFrame(tick)
             }
             rafRef.current = requestAnimationFrame(tick)
-            setMicBlocked(false)
-        } catch (err: any) {
-            if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-                setMicBlocked(true)
-            }
-            setMicVolume(0)
         }
-    }, [])
+    }, [isListening, isSpeaking])
 
     const stopVolumeAnalyzer = useCallback(() => {
         cancelAnimationFrame(rafRef.current)
-        micStreamRef.current?.getTracks().forEach(t => t.stop())
-        micStreamRef.current = null
+        if (micStreamRef.current) {
+            micStreamRef.current.getTracks().forEach(t => t.stop())
+            micStreamRef.current = null
+        }
         analyzerRef.current = null
         setMicVolume(0)
     }, [])
@@ -91,7 +106,8 @@ export function useSpeech(options: SpeechOptions = {}) {
             let currentChunk = 0;
 
             const voices = window.speechSynthesis.getVoices()
-            const preferred = voices.find(v => v.name.includes("Google") && v.lang.startsWith("en"))
+            const preferred = voices.find(v => v.name.includes("Google US English") || v.name.includes("Zira") || v.name.includes("Samantha") || v.name.includes("Female"))
+                || voices.find(v => v.name.includes("Google") && v.lang.startsWith("en"))
                 || voices.find(v => v.lang.startsWith("en-US"))
                 || voices.find(v => v.lang.startsWith("en"))
 
@@ -161,9 +177,9 @@ export function useSpeech(options: SpeechOptions = {}) {
 
             const recognition = new SpeechRecognition()
             recognitionRef.current = recognition
+            recognition.lang = "en-US"
             recognition.continuous = true
             recognition.interimResults = true
-            recognition.lang = "en-US"
             recognition.maxAlternatives = 1
             let finalTranscript = ""
             shouldRestartRef.current = true  // Allow auto-restart

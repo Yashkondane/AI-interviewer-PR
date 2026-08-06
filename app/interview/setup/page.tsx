@@ -119,7 +119,7 @@ export default function SetupPage() {
             cp_level: config.cp_level,
             preferred_language: config.preferred_language,
         })
-        router.push(`/interview/session?${params}`)
+        router.push(`/interview/preflight?${params}`)
     }
 
     const set = (key: string, val: string | number | boolean) => setConfig(c => ({ ...c, [key]: val }))
@@ -255,9 +255,6 @@ export default function SetupPage() {
                         <SelectGroup label="Duration" options={DURATIONS} value={config.duration_mins} onChange={v => {
                             const newDuration = Number(v)
                             set("duration_mins", newDuration)
-                            if (newDuration < 30) {
-                                set("dsa_enabled", false)
-                            }
                         }} />
 
                         {/* DSA Settings */}
@@ -265,12 +262,11 @@ export default function SetupPage() {
                             <div className="flex items-center justify-between">
                                 <div className="flex flex-col gap-1">
                                     <p className="text-foreground text-sm font-medium">Include DSA Coding Round</p>
-                                    <p className="text-muted-foreground text-xs">Only available for 30+ minute interviews</p>
+                                    <p className="text-muted-foreground text-xs">Available for all interview durations</p>
                                 </div>
                                 <button
-                                    onClick={() => config.duration_mins >= 30 && set("dsa_enabled", !config.dsa_enabled)}
-                                    disabled={config.duration_mins < 30}
-                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.dsa_enabled ? 'bg-primary' : 'bg-white/10'} ${config.duration_mins < 30 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                    onClick={() => set("dsa_enabled", !config.dsa_enabled)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${config.dsa_enabled ? 'bg-primary' : 'bg-white/10'}`}
                                 >
                                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.dsa_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                                 </button>

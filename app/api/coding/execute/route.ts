@@ -47,33 +47,36 @@ export async function POST(req: NextRequest) {
         const results = []
         let passedCount = 0
 
-        // For simplicity and to avoid Vercel timeouts, we'll run concurrently but with a limit
+        // OneCompiler API has strict rate limits, so we must execute sequentially
         const executeWithLimit = async (cases: any[]) => {
-            const promises = cases.map(async (tc) => {
+            const resultsList = []
+            for (const tc of cases) {
                 try {
                     const res = await executeCode(code, langConfig, tc.input)
                     if (res.exception) {
-                        return { passed: false, actualOutput: "", error: res.exception, input: tc.input, expectedOutput: tc.expectedOutput }
+                        resultsList.push({ passed: false, actualOutput: "", error: res.exception, input: tc.input, expectedOutput: tc.expectedOutput })
+                        continue
                     }
                     const output = res.stdout ? res.stdout.trim() : ""
                     const stderr = res.stderr ? res.stderr.trim() : ""
                     
-                    // Basic exact match for evaluation
                     const passed = output === String(tc.expectedOutput).trim()
                     if (passed) passedCount++
                     
-                    return {
+                    resultsList.push({
                         passed,
                         actualOutput: output || stderr,
                         error: stderr ? "Runtime/Compilation Error" : undefined,
                         input: tc.input,
                         expectedOutput: tc.expectedOutput
-                    }
+                    })
                 } catch (e: any) {
-                    return { passed: false, actualOutput: "", error: e.message, input: tc.input, expectedOutput: tc.expectedOutput }
+                    resultsList.push({ passed: false, actualOutput: "", error: e.message, input: tc.input, expectedOutput: tc.expectedOutput })
                 }
-            })
-            return Promise.all(promises)
+                // Small delay to prevent rate limiting
+                await new Promise(r => setTimeout(r, 200))
+            }
+            return resultsList
         }
 
         const evaluatedResults = await executeWithLimit(testCases)

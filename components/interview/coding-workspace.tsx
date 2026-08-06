@@ -112,6 +112,25 @@ function ResultPopup() {
                     </div>
                 )}
 
+                {/* AI Evaluation */}
+                {currentResult.evaluation && (
+                    <div className="bg-slate-800/50 rounded-xl p-4 mb-6 border border-white/5">
+                        <div className="grid grid-cols-2 gap-4 mb-3 border-b border-white/10 pb-3">
+                            <div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Time Complexity</div>
+                                <div className="text-base font-mono font-medium text-blue-400 mt-0.5">{currentResult.evaluation.timeComplexity}</div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Space Complexity</div>
+                                <div className="text-base font-mono font-medium text-emerald-400 mt-0.5">{currentResult.evaluation.spaceComplexity}</div>
+                            </div>
+                        </div>
+                        <div className="text-sm text-slate-300 leading-relaxed">
+                            {currentResult.evaluation.feedback}
+                        </div>
+                    </div>
+                )}
+
                 {/* Next Button */}
                 <Button
                     onClick={handleNext}
@@ -188,15 +207,17 @@ function SessionCompleteScreen() {
 export function CodingWorkspace() {
     const { 
         title, statement, code, language, consoleOutput, isExecuting,
-        setCode, setLanguage, testResults, questionNumber, totalQuestions,
+        setCode, setLanguage, testResults, testCases, questionNumber, totalQuestions,
         showResultPopup, isSessionComplete, difficulty
     } = useCodingStore()
 
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [activeTab, setActiveTab] = useState<"statement" | "console">("statement")
 
-    const handleRun = async () => {
-        useCodingStore.getState().setIsExecuting(true)
+    const handleRun = async (type: "run" | "sample") => {
+        const store = useCodingStore.getState()
+        store.setIsExecuting(true)
+        store.setConsoleOutput("Executing code...")
         try {
             const res = await fetch("/api/coding/execute", {
                 method: "POST",
@@ -205,18 +226,18 @@ export function CodingWorkspace() {
                     action: "run", 
                     code, 
                     language, 
-                    testCases: useCodingStore.getState().visibleTestCases 
+                    testCases: type === "sample" ? store.visibleTestCases : []
                 })
             })
             const data = await res.json()
-            useCodingStore.getState().setConsoleOutput(data.output || "Execution completed.")
-            if (data.results) useCodingStore.getState().setTestResults(data.results)
+            store.setConsoleOutput(data.output || "Execution completed.")
+            if (data.results) store.setTestResults(data.results)
             setActiveTab("console")
         } catch (err: any) {
-            useCodingStore.getState().setConsoleOutput("Error: " + err.message)
+            store.setConsoleOutput("Error: " + err.message)
             setActiveTab("console")
         } finally {
-            useCodingStore.getState().setIsExecuting(false)
+            store.setIsExecuting(false)
         }
     }
 
@@ -250,6 +271,30 @@ export function CodingWorkspace() {
             const threshold = SUSPICIOUS_TIME[questionDifficulty] || 180
             const isFlagged = timeTakenSecs < threshold && passRate >= 70
 
+            // Evaluate complexity
+            store.setConsoleOutput(data.output + "\n\nEvaluating time and space complexity... Please wait.")
+            let evaluationData = undefined
+            try {
+                const evalRes = await fetch("/api/coding/evaluate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        code,
+                        language,
+                        problemStatement: store.statement,
+                        passedCases: passed,
+                        totalCases: total,
+                        testResults: data.results
+                    })
+                })
+                const evalJson = await evalRes.json()
+                if (evalJson.evaluation) {
+                    evaluationData = evalJson.evaluation
+                }
+            } catch (err) {
+                console.error("Evaluation failed", err)
+            }
+
             const result: QuestionResult = {
                 questionNumber: store.questionNumber,
                 title: store.title || `Question ${store.questionNumber}`,
@@ -259,7 +304,8 @@ export function CodingWorkspace() {
                 score: Math.round(passRate),
                 timeTakenSecs,
                 isFlagged,
-                codeQuality: getCodeQuality(passRate, store.hintLevelUsed)
+                codeQuality: getCodeQuality(passRate, store.hintLevelUsed),
+                evaluation: evaluationData
             }
 
             store.setCurrentResult(result)
@@ -322,6 +368,34 @@ export function CodingWorkspace() {
                                     )}
                                 </div>
                                 <div className="prose prose-invert max-w-none text-sm" dangerouslySetInnerHTML={{ __html: statement || "Wait for the AI to generate your question." }} />
+                                
+                                {/* Divider */}
+                                <div className="h-px w-full bg-white/10 my-4"></div>
+
+                                {/* Sample Test Cases Section (Always visible below problem) */}
+                                {testCases && testCases.length > 0 ? (
+                                    <div className="flex flex-col gap-3">
+                                        <h3 className="font-semibold text-white">Sample Test Cases</h3>
+                                        {testCases.slice(0, 2).map((tc, i) => (
+                                            <div key={i} className="p-4 rounded-lg border bg-slate-800/50 border-white/10 flex flex-col gap-2">
+                                                <div className="font-semibold text-slate-200">Sample Case {i + 1}</div>
+                                                <div className="text-sm font-mono text-slate-400 mt-1 bg-black/40 p-2 rounded">
+                                                    <span className="font-semibold text-slate-300 block mb-1">Input:</span> 
+                                                    {tc.input}
+                                                </div>
+                                                <div className="text-sm font-mono text-slate-400 bg-black/40 p-2 rounded">
+                                                    <span className="font-semibold text-slate-300 block mb-1">Expected Output:</span> 
+                                                    {tc.expectedOutput}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {testCases.length > 2 && (
+                                            <div className="text-sm text-slate-400 italic mt-2">
+                                                + {testCases.length - 2} hidden test cases used for final evaluation.
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : null}
                             </div>
                         ) : (
                             <div className="flex flex-col gap-4">
@@ -334,36 +408,45 @@ export function CodingWorkspace() {
                                 </div>
                                 
                                 {testResults.length > 0 && (
-                                    <div className="flex flex-col gap-2 mt-4">
-                                        <h3 className="font-semibold text-white">Test Cases</h3>
+                                    <div className="flex flex-col gap-3 mt-4">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-semibold text-white">Execution Results</h3>
+                                            <span className="text-sm font-medium text-slate-300">
+                                                {testResults.filter(tr => tr.passed).length} / {testResults.length} Passed
+                                            </span>
+                                        </div>
                                         {testResults.map((tr, i) => {
                                             const isHidden = i >= 2;
                                             return (
-                                                <div key={i} className={`p-3 rounded-lg border flex flex-col gap-1 ${tr.passed ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                                                <div key={i} className={`p-4 rounded-lg border flex flex-col gap-2 ${tr.passed ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
                                                     <div className="flex items-center gap-2">
-                                                        {tr.passed ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                                                        <span className={`text-sm font-medium ${tr.passed ? 'text-green-400' : 'text-red-400'}`}>
-                                                            {isHidden ? `Hidden Test Case ${i + 1}` : `Test Case ${i + 1}`}
+                                                        {tr.passed ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <XCircle className="w-5 h-5 text-red-500" />}
+                                                        <span className={`font-semibold ${tr.passed ? 'text-green-400' : 'text-red-400'}`}>
+                                                            {isHidden ? `Hidden Test Case ${i + 1}` : `Sample Case ${i + 1}`}
                                                         </span>
                                                     </div>
                                                     {!isHidden && tr.input && (
-                                                        <div className="text-xs font-mono text-slate-400 mt-2">
-                                                            <span className="font-semibold text-slate-300">Input:</span> {tr.input}
+                                                        <div className="text-sm font-mono text-slate-400 mt-2 bg-black/40 p-2 rounded">
+                                                            <span className="font-semibold text-slate-300 block mb-1">Input:</span> 
+                                                            {tr.input}
                                                         </div>
                                                     )}
                                                     {!isHidden && tr.expectedOutput && (
-                                                        <div className="text-xs font-mono text-slate-400">
-                                                            <span className="font-semibold text-slate-300">Expected:</span> {tr.expectedOutput}
+                                                        <div className="text-sm font-mono text-slate-400 bg-black/40 p-2 rounded">
+                                                            <span className="font-semibold text-slate-300 block mb-1">Expected Output:</span> 
+                                                            {tr.expectedOutput}
                                                         </div>
                                                     )}
-                                                    {!isHidden && !tr.passed && tr.actualOutput && (
-                                                        <div className="text-xs font-mono text-slate-400">
-                                                            <span className="font-semibold text-red-300">Actual:</span> {tr.actualOutput}
+                                                    {!isHidden && !tr.passed && tr.actualOutput !== undefined && (
+                                                        <div className="text-sm font-mono text-slate-400 bg-red-950/40 p-2 rounded border border-red-500/20">
+                                                            <span className="font-semibold text-red-300 block mb-1">Your Output:</span> 
+                                                            {tr.actualOutput === "" ? <span className="italic text-slate-500">(empty output)</span> : tr.actualOutput}
                                                         </div>
                                                     )}
                                                     {!isHidden && !tr.passed && tr.error && (
-                                                        <div className="text-xs font-mono text-red-400">
-                                                            <span className="font-semibold">Error:</span> {tr.error}
+                                                        <div className="text-sm font-mono text-red-400 bg-red-950/40 p-2 rounded border border-red-500/20">
+                                                            <span className="font-semibold block mb-1">Error:</span> 
+                                                            {tr.error}
                                                         </div>
                                                     )}
                                                 </div>
@@ -392,25 +475,43 @@ export function CodingWorkspace() {
                         </select>
                         
                         <div className="flex items-center gap-2">
-                            <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-white/10 mr-2">
+                            <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-white/10 mr-1">
                                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                             </button>
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                onClick={handleRun} 
+                                onClick={() => handleRun("run")} 
                                 disabled={isExecuting || !code}
                                 className="bg-slate-800 border-white/10 hover:bg-slate-700 h-8 text-xs"
                             >
                                 <Play className="w-3 h-3 mr-1" /> Run Code
                             </Button>
                             <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handleRun("sample")} 
+                                disabled={isExecuting || !code}
+                                className="bg-slate-800 border-white/10 hover:bg-slate-700 h-8 text-xs hidden sm:flex"
+                            >
+                                <Play className="w-3 h-3 mr-1" /> Run Samples
+                            </Button>
+                            <Button 
                                 size="sm" 
                                 onClick={handleSubmit} 
                                 disabled={isExecuting || !code}
-                                className="bg-blue-600 hover:bg-blue-500 text-white h-8 text-xs"
+                                className="bg-blue-600 hover:bg-blue-500 text-white h-8 text-xs ml-1"
                             >
                                 <Send className="w-3 h-3 mr-1" /> Submit
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => useCodingStore.getState().skipQuestion()} 
+                                disabled={isExecuting}
+                                className="text-slate-400 hover:text-white h-8 text-xs ml-1"
+                            >
+                                Skip
                             </Button>
                         </div>
                     </div>

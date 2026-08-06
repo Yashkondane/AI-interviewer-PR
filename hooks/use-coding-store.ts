@@ -23,6 +23,13 @@ export interface QuestionResult {
   timeTakenSecs: number
   isFlagged: boolean    // true if suspiciously fast
   codeQuality: 'excellent' | 'good' | 'average' | 'needs-improvement'
+  evaluation?: {
+    timeComplexity: string
+    spaceComplexity: string
+    strengths: string[]
+    weaknesses: string[]
+    feedback: string
+  }
 }
 
 export interface CodingState {
@@ -63,6 +70,7 @@ export interface CodingState {
   setShowResultPopup: (show: boolean) => void
   setCurrentResult: (result: QuestionResult | null) => void
   advanceToNextQuestion: () => void
+  skipQuestion: () => void
   completeSession: () => void
   reset: () => void
 }
@@ -111,26 +119,75 @@ export const useCodingStore = create<CodingState>((set) => ({
   incrementHintLevel: () => set((state) => ({ hintLevelUsed: state.hintLevelUsed + 1 })),
   setShowResultPopup: (show) => set({ showResultPopup: show }),
   setCurrentResult: (result) => set({ currentResult: result }),
-  advanceToNextQuestion: () => set((state) => ({
-    questionNumber: state.questionNumber + 1,
-    questionId: null,
-    title: "",
-    difficulty: "",
-    statement: "",
-    starterCode: "",
-    code: "",
-    testCases: [],
-    visibleTestCases: [],
-    consoleOutput: "",
-    testResults: [],
-    hintLevelUsed: 0,
-    showResultPopup: false,
-    currentResult: null,
-    questionStartTime: Date.now(),
-    questionHistory: state.currentResult 
-      ? [...state.questionHistory, state.currentResult]
-      : state.questionHistory,
-  })),
+  advanceToNextQuestion: () => set((state) => {
+    const qNum = state.questionNumber + 1
+    return {
+      questionNumber: qNum,
+      isSessionComplete: qNum > state.totalQuestions,
+      showResultPopup: false,
+      currentResult: null,
+      questionHistory: state.currentResult 
+        ? [...state.questionHistory, state.currentResult]
+        : state.questionHistory,
+      
+      // Reset editor state
+      title: "",
+      difficulty: "",
+      statement: "",
+      starterCode: "",
+      code: "",
+      testCases: [],
+      visibleTestCases: [],
+      consoleOutput: "",
+      testResults: [],
+      hintLevelUsed: 0,
+      questionStartTime: Date.now()
+    }
+  }),
+  
+  skipQuestion: () => set((state) => {
+    const skippedResult: QuestionResult = {
+      questionNumber: state.questionNumber,
+      title: state.title,
+      difficulty: state.difficulty,
+      passed: 0,
+      total: state.testCases.length || 10,
+      score: 0,
+      timeTakenSecs: Math.round((Date.now() - state.questionStartTime) / 1000),
+      isFlagged: false,
+      codeQuality: 'needs-improvement',
+      evaluation: {
+        timeComplexity: "N/A",
+        spaceComplexity: "N/A",
+        strengths: [],
+        weaknesses: ["Question skipped without submission"],
+        feedback: "You chose to skip this question. Make sure to review the concepts later!"
+      }
+    }
+    
+    const qNum = state.questionNumber + 1
+    return {
+      questionNumber: qNum,
+      isSessionComplete: qNum > state.totalQuestions,
+      showResultPopup: false,
+      currentResult: null,
+      questionHistory: [...state.questionHistory, skippedResult],
+      
+      // Reset editor state
+      title: "",
+      difficulty: "",
+      statement: "",
+      starterCode: "",
+      code: "",
+      testCases: [],
+      visibleTestCases: [],
+      consoleOutput: "",
+      testResults: [],
+      hintLevelUsed: 0,
+      questionStartTime: Date.now()
+    }
+  }),
+
   completeSession: () => set((state) => ({
     isSessionComplete: true,
     showResultPopup: false,

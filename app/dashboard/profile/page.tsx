@@ -248,8 +248,8 @@ export default function ProfilePage() {
                                         {resume.contact?.phone && <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> {resume.contact.phone}</span>}
                                     </div>
                                     <div className="flex gap-3 pt-1">
-                                        {resume.contact?.linkedin && <a href={resume.contact.linkedin} target="_blank" className="text-muted-foreground hover:text-primary transition-colors"><LinkIcon className="h-4 w-4" /></a>}
-                                        {resume.contact?.github && <a href={resume.contact.github} target="_blank" className="text-muted-foreground hover:text-primary transition-colors"><Github className="h-4 w-4" /></a>}
+                                        {resume.contact?.linkedin && <a href={resume.contact.linkedin.startsWith("http") ? resume.contact.linkedin : `https://${resume.contact.linkedin}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors"><LinkIcon className="h-4 w-4" /></a>}
+                                        {resume.contact?.github && <a href={resume.contact.github.startsWith("http") ? resume.contact.github : `https://${resume.contact.github}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors"><Github className="h-4 w-4" /></a>}
                                     </div>
                                 </div>
                             ) : (

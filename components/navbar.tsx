@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button"
 const navLinks = [
   { label: "Features", href: "#features" },
   { label: "How It Works", href: "#how-it-works" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Testimonials", href: "#testimonials" },
+  { label: "Resume Analysis", href: "#resume-reader" },
+  { label: "Practice", href: "#cta" },
 ]
 
 export default function Navbar() {
@@ -49,7 +49,7 @@ export default function Navbar() {
             <Image src="/logo.png" alt="Prepwise Logo" fill className="object-contain" priority />
           </div>
           <span className="font-bold text-foreground text-xl tracking-tight hidden sm:block">
-            Prep<span className="text-primary">wise</span>
+            Prep<span className="text-primary">Wise</span>
           </span>
         </Link>
 
@@ -80,13 +80,15 @@ export default function Navbar() {
           >
             Sign in
           </Link>
-          <Button
-            size="sm"
-            className="btn-primary-glow bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 rounded-xl gap-1.5"
-          >
-            <Zap className="h-3.5 w-3.5" />
-            Get Started Free
-          </Button>
+          <Link href="/auth/signup">
+            <Button
+              size="sm"
+              className="btn-primary-glow bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 rounded-xl gap-1.5"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Get Started
+            </Button>
+          </Link>
         </div>
 
         {/* Mobile toggle */}
@@ -123,10 +125,12 @@ export default function Navbar() {
           >
             Sign in
           </Link>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold w-full rounded-xl gap-2">
-            <Zap className="h-4 w-4" />
-            Get Started Free
-          </Button>
+          <Link href="/auth/signup">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold w-full rounded-xl gap-2">
+              <Zap className="h-4 w-4" />
+              Get Started
+            </Button>
+          </Link>
         </div>
       )}
     </header>
