@@ -85,6 +85,7 @@ export default function SetupPage() {
         focus: "topic", // 'topic' | 'resume'
         custom_topics: "",
         dsa_enabled: false,
+        dsa_only: false,
         cp_level: "Intermediate",
         preferred_language: "javascript",
     })
@@ -104,6 +105,24 @@ export default function SetupPage() {
         }
         check()
     }, [])
+
+    useEffect(() => {
+        let updates: Partial<typeof config> = {}
+        const isTech = ["SWE", "Data"].includes(config.role)
+        
+        if (!isTech && config.interview_type !== "Behavioral") {
+            updates.interview_type = "Behavioral"
+        }
+        
+        if ((!isTech || config.duration_mins < 30) && config.dsa_enabled) {
+            updates.dsa_enabled = false
+            updates.dsa_only = false
+        }
+        
+        if (Object.keys(updates).length > 0) {
+            setConfig(c => ({ ...c, ...updates }))
+        }
+    }, [config.role, config.duration_mins, config.interview_type, config.dsa_enabled])
 
     const startSession = () => {
         setLoading(true)
@@ -258,57 +277,64 @@ export default function SetupPage() {
                             </div>
                         )}
 
-                        <SelectGroup label="Interview Type" options={TYPES} value={config.interview_type} onChange={v => set("interview_type", v)} />
+                        <SelectGroup 
+                            label="Interview Type" 
+                            options={["SWE", "Data"].includes(config.role) ? TYPES : ["Behavioral"]} 
+                            value={config.interview_type} 
+                            onChange={v => set("interview_type", v)} 
+                        />
                         <SelectGroup label="Duration" options={DURATIONS} value={config.duration_mins} onChange={v => {
                             const newDuration = Number(v)
                             set("duration_mins", newDuration)
                         }} />
 
                         {/* DSA Settings */}
-                        <div className="flex flex-col gap-4 p-4 rounded-xl" style={{ background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.15)" }}>
-                            <div className="flex items-center justify-between">
-                                <div className="flex flex-col gap-1">
-                                    <p className="text-foreground text-sm font-medium">Include DSA Coding Round</p>
-                                    <p className="text-muted-foreground text-xs">Available for all interview durations</p>
-                                </div>
-                                <button
-                                    onClick={() => set("dsa_enabled", !config.dsa_enabled)}
-                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${config.dsa_enabled ? 'bg-primary' : 'bg-white/10'}`}
-                                >
-                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.dsa_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                </button>
-                            </div>
-                            
-                            {config.dsa_enabled && (
-                                <div className="flex flex-col gap-4 pt-4 border-t border-white/10 mt-2">
-                                    <SelectGroup 
-                                        label="DSA/CP Level" 
-                                        options={["Beginner", "Intermediate", "Advanced", "Expert"]} 
-                                        value={config.cp_level} 
-                                        onChange={v => set("cp_level", v)} 
-                                    />
-                                    <SelectGroup 
-                                        label="Preferred Language" 
-                                        options={["javascript", "python", "java", "cpp"]} 
-                                        value={config.preferred_language} 
-                                        onChange={v => set("preferred_language", v)} 
-                                    />
-                                    
-                                    <div className="flex items-center justify-between pt-2">
-                                        <div className="flex flex-col gap-1">
-                                            <p className="text-foreground text-sm font-medium">Skip Conversation</p>
-                                            <p className="text-muted-foreground text-xs">Jump directly into the coding problem</p>
-                                        </div>
-                                        <button
-                                            onClick={() => set("dsa_only", !config.dsa_only)}
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.dsa_only ? 'bg-primary' : 'bg-white/10'}`}
-                                        >
-                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.dsa_only ? 'translate-x-6' : 'translate-x-1'}`} />
-                                        </button>
+                        {["SWE", "Data"].includes(config.role) && config.duration_mins >= 30 && (
+                            <div className="flex flex-col gap-4 p-4 rounded-xl" style={{ background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.15)" }}>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-foreground text-sm font-medium">Include DSA Coding Round</p>
+                                        <p className="text-muted-foreground text-xs">Available for 30+ min interviews</p>
                                     </div>
+                                    <button
+                                        onClick={() => set("dsa_enabled", !config.dsa_enabled)}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${config.dsa_enabled ? 'bg-primary' : 'bg-white/10'}`}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.dsa_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                    </button>
                                 </div>
-                            )}
-                        </div>
+                                
+                                {config.dsa_enabled && (
+                                    <div className="flex flex-col gap-4 pt-4 border-t border-white/10 mt-2">
+                                        <SelectGroup 
+                                            label="DSA/CP Level" 
+                                            options={["Beginner", "Intermediate", "Advanced", "Expert"]} 
+                                            value={config.cp_level} 
+                                            onChange={v => set("cp_level", v)} 
+                                        />
+                                        <SelectGroup 
+                                            label="Preferred Language" 
+                                            options={["javascript", "python", "java", "cpp"]} 
+                                            value={config.preferred_language} 
+                                            onChange={v => set("preferred_language", v)} 
+                                        />
+                                        
+                                        <div className="flex items-center justify-between pt-2">
+                                            <div className="flex flex-col gap-1">
+                                                <p className="text-foreground text-sm font-medium">Skip Conversation</p>
+                                                <p className="text-muted-foreground text-xs">Jump directly into the coding problem</p>
+                                            </div>
+                                            <button
+                                                onClick={() => set("dsa_only", !config.dsa_only)}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.dsa_only ? 'bg-primary' : 'bg-white/10'}`}
+                                            >
+                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.dsa_only ? 'translate-x-6' : 'translate-x-1'}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         {/* Camera note */}
                         <div className="flex items-start gap-3 rounded-xl p-4"
                             style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)" }}>

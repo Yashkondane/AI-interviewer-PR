@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Eye, EyeOff, ArrowRight, Chrome, Loader2 } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
@@ -39,12 +39,6 @@ function LoginForm() {
         router.push(redirectTo)
     }
 
-    const handleGoogle = async () => {
-        await supabase.auth.signInWithOAuth({
-            provider: "google",
-            options: { redirectTo: `${location.origin}/auth/callback?redirectTo=${redirectTo}` },
-        })
-    }
 
     return (
         <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "hsl(216 42% 5%)" }}>
@@ -78,21 +72,7 @@ function LoginForm() {
                     <p className="text-muted-foreground text-sm mt-1">Sign in to continue your practice</p>
                 </div>
 
-                {/* Google OAuth */}
-                <Button
-                    onClick={handleGoogle}
-                    variant="outline"
-                    className="w-full rounded-xl border-white/10 bg-white/4 hover:bg-white/8 text-foreground gap-3 h-11"
-                >
-                    <Chrome className="h-4 w-4" />
-                    Continue with Google
-                </Button>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-                    <span className="text-muted-foreground text-xs">or</span>
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-                </div>
 
                 {/* Email form */}
                 <form onSubmit={handleLogin} className="flex flex-col gap-4">

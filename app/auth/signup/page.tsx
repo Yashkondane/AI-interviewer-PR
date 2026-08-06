@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, ArrowRight, Chrome } from "lucide-react"
+import { Eye, EyeOff, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
@@ -44,12 +44,6 @@ export default function SignupPage() {
         router.push("/auth/login?confirmed=false")
     }
 
-    const handleGoogle = async () => {
-        await supabase.auth.signInWithOAuth({
-            provider: "google",
-            options: { redirectTo: `${location.origin}/auth/callback` },
-        })
-    }
 
     return (
         <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "hsl(216 42% 5%)" }}>
@@ -81,20 +75,7 @@ export default function SignupPage() {
                     <p className="text-muted-foreground text-sm mt-1">Start practicing in under 60 seconds</p>
                 </div>
 
-                <Button
-                    onClick={handleGoogle}
-                    variant="outline"
-                    className="w-full rounded-xl border-white/10 bg-white/4 hover:bg-white/8 text-foreground gap-3 h-11"
-                >
-                    <Chrome className="h-4 w-4" />
-                    Continue with Google
-                </Button>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-                    <span className="text-muted-foreground text-xs">or</span>
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-                </div>
 
                 <form onSubmit={handleSignup} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
