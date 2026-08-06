@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { useCodingStore, QuestionResult } from "@/hooks/use-coding-store"
+import { STARTER_TEMPLATES } from "@/lib/dsa-problems"
 import Editor from "@monaco-editor/react"
 import { Play, Send, Maximize2, Minimize2, Loader2, CheckCircle2, XCircle, Trophy, AlertTriangle, ArrowRight, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -217,8 +218,22 @@ export function CodingWorkspace() {
     const handleRun = async (type: "run" | "sample") => {
         const store = useCodingStore.getState()
         store.setIsExecuting(true)
-        store.setConsoleOutput("Executing code...")
+        store.setConsoleOutput("⏳ Executing code...")
+        store.setTestResults([])
         try {
+            // "run" sends the first visible test case as stdin (so stdin-based code works)
+            // "sample" runs against ALL visible sample test cases
+            let casesToSend: any[] = []
+            if (type === "sample") {
+                casesToSend = store.testCases
+            } else {
+                // "run" = run once with the first sample as stdin
+                const firstCase = store.visibleTestCases?.[0] || store.testCases?.[0]
+                if (firstCase) {
+                    casesToSend = [firstCase]
+                }
+            }
+
             const res = await fetch("/api/coding/execute", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -226,15 +241,19 @@ export function CodingWorkspace() {
                     action: "run", 
                     code, 
                     language, 
-                    testCases: type === "sample" ? store.visibleTestCases : []
+                    testCases: casesToSend
                 })
             })
             const data = await res.json()
-            store.setConsoleOutput(data.output || "Execution completed.")
+            if (data.error) {
+                store.setConsoleOutput("❌ " + data.error)
+            } else {
+                store.setConsoleOutput(data.output || "Execution completed.")
+            }
             if (data.results) store.setTestResults(data.results)
             setActiveTab("console")
         } catch (err: any) {
-            store.setConsoleOutput("Error: " + err.message)
+            store.setConsoleOutput("❌ Error: " + err.message)
             setActiveTab("console")
         } finally {
             store.setIsExecuting(false)
@@ -323,6 +342,9 @@ export function CodingWorkspace() {
         return <SessionCompleteScreen />
     }
 
+    // Show loading skeleton while question is being fetched
+    const isQuestionLoading = !title && !statement
+
     return (
         <>
             {/* Result Popup Overlay */}
@@ -356,7 +378,7 @@ export function CodingWorkspace() {
                         {activeTab === "statement" ? (
                             <div className="flex flex-col gap-4 text-slate-300">
                                 <div className="flex items-center gap-3">
-                                    <h2 className="text-xl font-bold text-white">{title || "Loading Problem..."}</h2>
+                                    <h2 className="text-xl font-bold text-white">{isQuestionLoading ? "" : title}</h2>
                                     {difficulty && (
                                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                             difficulty === 'Easy' ? 'bg-green-500/20 text-green-400' :
@@ -367,7 +389,20 @@ export function CodingWorkspace() {
                                         </span>
                                     )}
                                 </div>
-                                <div className="prose prose-invert max-w-none text-sm" dangerouslySetInnerHTML={{ __html: statement || "Wait for the AI to generate your question." }} />
+                                {isQuestionLoading ? (
+                                    <div className="flex flex-col gap-4 animate-pulse">
+                                        <div className="h-5 bg-slate-700/50 rounded w-3/4" />
+                                        <div className="h-4 bg-slate-700/50 rounded w-full" />
+                                        <div className="h-4 bg-slate-700/50 rounded w-5/6" />
+                                        <div className="h-4 bg-slate-700/50 rounded w-2/3" />
+                                        <div className="h-12 bg-slate-700/30 rounded-lg w-full mt-2" />
+                                        <div className="h-4 bg-slate-700/50 rounded w-4/5" />
+                                        <div className="h-4 bg-slate-700/50 rounded w-1/2" />
+                                        <p className="text-sm text-slate-500 mt-4 text-center">Generating your coding problem with AI...</p>
+                                    </div>
+                                ) : (
+                                    <div className="prose prose-invert max-w-none text-sm" dangerouslySetInnerHTML={{ __html: statement }} />
+                                )}
                                 
                                 {/* Divider */}
                                 <div className="h-px w-full bg-white/10 my-4"></div>
@@ -379,13 +414,17 @@ export function CodingWorkspace() {
                                         {testCases.slice(0, 2).map((tc, i) => (
                                             <div key={i} className="p-4 rounded-lg border bg-slate-800/50 border-white/10 flex flex-col gap-2">
                                                 <div className="font-semibold text-slate-200">Sample Case {i + 1}</div>
-                                                <div className="text-sm font-mono text-slate-400 mt-1 bg-black/40 p-2 rounded">
+                                                <div className="text-sm font-mono text-slate-400 mt-1 bg-black/40 p-2 rounded break-all">
                                                     <span className="font-semibold text-slate-300 block mb-1">Input:</span> 
-                                                    {tc.input}
+                                                    {String(tc.input).split(/\r?\n|\\n/).map((line, idx) => (
+                                                        <div key={idx} className="min-h-[1.25rem]">{line}</div>
+                                                    ))}
                                                 </div>
-                                                <div className="text-sm font-mono text-slate-400 bg-black/40 p-2 rounded">
+                                                <div className="text-sm font-mono text-slate-400 bg-black/40 p-2 rounded break-all">
                                                     <span className="font-semibold text-slate-300 block mb-1">Expected Output:</span> 
-                                                    {tc.expectedOutput}
+                                                    {String(tc.expectedOutput).split(/\r?\n|\\n/).map((line, idx) => (
+                                                        <div key={idx} className="min-h-[1.25rem]">{line}</div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         ))}
@@ -399,7 +438,7 @@ export function CodingWorkspace() {
                             </div>
                         ) : (
                             <div className="flex flex-col gap-4">
-                                <div className="bg-black/50 rounded-lg p-4 font-mono text-sm min-h-[200px] text-slate-300 whitespace-pre-wrap">
+                                <div className="bg-black/50 rounded-lg p-4 font-mono text-sm min-h-[200px] text-slate-300 whitespace-pre-wrap break-all">
                                     {isExecuting ? (
                                         <div className="flex items-center gap-2 text-blue-400">
                                             <Loader2 className="w-4 h-4 animate-spin" /> Executing code...
@@ -426,27 +465,35 @@ export function CodingWorkspace() {
                                                         </span>
                                                     </div>
                                                     {!isHidden && tr.input && (
-                                                        <div className="text-sm font-mono text-slate-400 mt-2 bg-black/40 p-2 rounded">
+                                                        <div className="text-sm font-mono text-slate-400 mt-2 bg-black/40 p-2 rounded break-all">
                                                             <span className="font-semibold text-slate-300 block mb-1">Input:</span> 
-                                                            {tr.input}
+                                                            {String(tr.input).split(/\r?\n|\\n/).map((line, idx) => (
+                                                                <div key={idx} className="min-h-[1.25rem]">{line}</div>
+                                                            ))}
                                                         </div>
                                                     )}
                                                     {!isHidden && tr.expectedOutput && (
-                                                        <div className="text-sm font-mono text-slate-400 bg-black/40 p-2 rounded">
+                                                        <div className="text-sm font-mono text-slate-400 bg-black/40 p-2 rounded break-all">
                                                             <span className="font-semibold text-slate-300 block mb-1">Expected Output:</span> 
-                                                            {tr.expectedOutput}
+                                                            {String(tr.expectedOutput).split(/\r?\n|\\n/).map((line, idx) => (
+                                                                <div key={idx} className="min-h-[1.25rem]">{line}</div>
+                                                            ))}
                                                         </div>
                                                     )}
                                                     {!isHidden && !tr.passed && tr.actualOutput !== undefined && (
-                                                        <div className="text-sm font-mono text-slate-400 bg-red-950/40 p-2 rounded border border-red-500/20">
+                                                        <div className="text-sm font-mono text-slate-400 bg-red-950/40 p-2 rounded border border-red-500/20 break-all">
                                                             <span className="font-semibold text-red-300 block mb-1">Your Output:</span> 
-                                                            {tr.actualOutput === "" ? <span className="italic text-slate-500">(empty output)</span> : tr.actualOutput}
+                                                            {tr.actualOutput === "" ? <span className="italic text-slate-500">(empty output)</span> : String(tr.actualOutput).split(/\r?\n|\\n/).map((line, idx) => (
+                                                                <div key={idx} className="min-h-[1.25rem]">{line}</div>
+                                                            ))}
                                                         </div>
                                                     )}
                                                     {!isHidden && !tr.passed && tr.error && (
-                                                        <div className="text-sm font-mono text-red-400 bg-red-950/40 p-2 rounded border border-red-500/20">
+                                                        <div className="text-sm font-mono text-red-400 bg-red-950/40 p-2 rounded border border-red-500/20 break-all">
                                                             <span className="font-semibold block mb-1">Error:</span> 
-                                                            {tr.error}
+                                                            {String(tr.error).split(/\r?\n|\\n/).map((line, idx) => (
+                                                                <div key={idx} className="min-h-[1.25rem]">{line}</div>
+                                                            ))}
                                                         </div>
                                                     )}
                                                 </div>
@@ -465,8 +512,15 @@ export function CodingWorkspace() {
                     <div className="h-12 border-b border-white/10 bg-slate-900/80 flex items-center justify-between px-4">
                         <select 
                             value={language}
-                            onChange={(e) => setLanguage(e.target.value)}
-                            className="bg-slate-800 text-sm text-slate-200 px-3 py-1.5 rounded-md border border-white/10 outline-none"
+                            onChange={(e) => {
+                                const newLang = e.target.value
+                                setLanguage(newLang)
+                                
+                                if (STARTER_TEMPLATES[newLang]) {
+                                    setCode(STARTER_TEMPLATES[newLang])
+                                }
+                            }}
+                            className="bg-slate-800 text-sm text-slate-200 px-3 py-1.5 rounded-md border border-white/10 outline-none cursor-pointer"
                         >
                             <option value="javascript">JavaScript (Node)</option>
                             <option value="python">Python 3</option>

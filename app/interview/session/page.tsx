@@ -11,6 +11,7 @@ import { CodingWorkspace } from "@/components/interview/coding-workspace"
 import { useInterview } from "@/hooks/use-interview"
 import { useSpeech } from "@/hooks/use-speech"
 import { useCodingStore } from "@/hooks/use-coding-store"
+import { STARTER_TEMPLATES } from "@/lib/dsa-problems"
 import { createClient } from "@/lib/supabase/client"
 import {
     PhoneOff, Mic, MicOff, VideoOff, Video,
@@ -178,11 +179,22 @@ function SessionContent() {
     useEffect(() => {
         if (!started.current) {
             started.current = true
+            
+            // Pre-set user's chosen language and template code before question even finishes loading
+            const preferredLang = config.preferred_language || "javascript"
+            
+            // Reset any previous session state from the global store
+            useCodingStore.getState().reset()
+            useCodingStore.getState().setLanguage(preferredLang)
+            if (STARTER_TEMPLATES[preferredLang]) {
+                useCodingStore.getState().setCode(STARTER_TEMPLATES[preferredLang])
+            }
+
             startVolumeAnalyzer()
             startInterview()
         }
         return () => stopVolumeAnalyzer()
-    }, [startInterview, startVolumeAnalyzer, stopVolumeAnalyzer])
+    }, [startInterview, startVolumeAnalyzer, stopVolumeAnalyzer, config.preferred_language])
 
     // Auto-redirect to results when interview is done
     useEffect(() => {

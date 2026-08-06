@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" })
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
         const prompt = `
 You are an expert technical interviewer evaluating a candidate's submitted code for a DSA problem.

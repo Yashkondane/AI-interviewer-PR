@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Video, Briefcase, Clock, LogIn, UserPlus } from "lucide-react"
+import Link from "next/link"
+import { ArrowRight, Video, Briefcase, Clock, LogIn, UserPlus, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 
@@ -166,7 +167,7 @@ export default function SetupPage() {
                 />
             )}
 
-            <div className="min-h-screen flex items-center justify-center px-4 py-16"
+            <div className="min-h-screen flex items-center justify-center px-4 py-16 relative"
                 style={{ background: "hsl(216 42% 5%)" }}>
                 {/* Background */}
                 <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden>
@@ -174,7 +175,13 @@ export default function SetupPage() {
                         style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.5) 0%, transparent 65%)", filter: "blur(80px)" }} />
                 </div>
 
-                <div className="w-full max-w-lg">
+                {/* Back Button */}
+                <button onClick={() => router.back()} className="absolute top-8 left-8 flex items-center gap-2 text-muted-foreground hover:text-white transition-colors text-sm font-medium">
+                    <ChevronLeft className="w-4 h-4" />
+                    Go Back
+                </button>
+
+                <div className="w-full max-w-lg mt-8">
                     {/* Header */}
                     <div className="mb-8">
                         <div className="flex items-center gap-2 mb-4">
